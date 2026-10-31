@@ -2,6 +2,7 @@ const state = {
   date: todayISO(),
   categories: [],
   grid: null,
+  predictions: null,
   editing: null,
 };
 
@@ -9,6 +10,11 @@ function todayISO() {
   const d = new Date();
   const tz = d.getTimezoneOffset() * 60000;
   return new Date(d - tz).toISOString().slice(0, 10);
+}
+
+function getCurrentSlot() {
+  const now = new Date();
+  return Math.floor((now.getHours() * 60 + now.getMinutes()) / 30);
 }
 
 function slotToTime(i) {
@@ -28,7 +34,7 @@ async function fetchJSON(url, options) {
   if (!r.ok) {
     let detail = `HTTP ${r.status}`;
     try { const body = await r.json(); if (body.detail) detail = body.detail; } catch (_) {}
-    throw new Error(detail);
+    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
   }
   return r.status === 204 ? null : r.json();
 }
@@ -40,7 +46,13 @@ async function loadMeta() {
 
 async function loadDay(date) {
   state.date = date;
-  state.grid = await fetchJSON(`/days/${date}`);
+  // Загружаем реальные данные и предсказания параллельно
+  const [grid, preds] = await Promise.all([
+    fetchJSON(`/days/${date}`),
+    fetchJSON(`/predict/${date}`)
+  ]);
+  state.grid = grid;
+  state.predictions = preds;
   render();
 }
 
@@ -66,22 +78,55 @@ function renderTimeline() {
   const el = document.getElementById("timeline");
   el.innerHTML = "";
 
-  for (const slot of state.grid.slots) {
+  const todayStr = todayISO();
+  const currentSlot = getCurrentSlot();
+
+  for (let i = 0; i < 48; i++) {
+    const slot = state.grid.slots[i];
+    const block = slot.block;
+    const prediction = state.predictions[i];
+
     const div = document.createElement("div");
     div.className = "slot";
-    const block = slot.block;
-    const time = slotToTime(slot.slot_index);
+    const time = slotToTime(i);
 
-    if (block) {
-      div.classList.add("filled", `cat-${block.category}`);
-      const letter = block.category.charAt(0).toUpperCase();
-      div.innerHTML = `<span class="cat-letter">${letter}</span>`;
-      div.title = `${time} - ${block.category}`;
+    // Определяем статус времени
+    let isPast = false;
+    let isFuture = false;
+    
+    if (state.date < todayStr) {
+      isPast = true;
+    } else if (state.date > todayStr) {
+      isFuture = true;
     } else {
-      div.classList.add("empty");
+      // Сегодня
+      if (i < currentSlot) isPast = true;
+      else if (i > currentSlot) isFuture = true;
+      // i === currentSlot — это "сейчас" (ни past, ни future)
     }
 
-    div.addEventListener("click", () => openModal(slot));
+    if (block) {
+      // Если блок уже залогирован (только в прошлом)
+      div.classList.add("filled", `cat-${block.category}`);
+      div.innerHTML = `<span class="cat-letter">${block.category.charAt(0).toUpperCase()}</span>`;
+      div.title = `${time} - ${block.category}`;
+      div.addEventListener("click", () => openModal(slot)); // Можно редактировать
+    } else if (isFuture && prediction) {
+      // Будущий предсказанный блок
+      div.classList.add("predicted", `cat-${prediction.category}`);
+      div.innerHTML = `<span class="cat-letter">${prediction.category.charAt(0).toUpperCase()}</span>`;
+      div.title = `Predicted: ${time} - ${prediction.category}`;
+      // Клик не добавляем, так как нельзя редактировать
+    } else if (isPast) {
+      // Прошлый пустой слот (можно заполнить)
+      div.classList.add("empty");
+      div.addEventListener("click", () => openModal(slot));
+    } else {
+      // Текущий слот (сейчас) или пустой будущий (если предсказания нет)
+      div.classList.add("empty", "now-slot");
+      // Не добавляем клик
+    }
+
     el.appendChild(div);
   }
   updateNowLine();
@@ -146,7 +191,6 @@ function renderCategorySelect() {
     btn.type = "button";
     btn.className = `category-btn cat-${cat}`;
     btn.textContent = cat;
-    // Клик по кнопке сразу сохраняет!
     btn.addEventListener("click", () => saveBlock(cat));
     container.appendChild(btn);
   }
@@ -157,14 +201,12 @@ async function saveBlock(category) {
   
   try {
     if (block) {
-      // Обновляем существующий
       await fetchJSON(`/blocks/${block.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ category }),
       });
     } else {
-      // Создаем новый
       await fetchJSON("/blocks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -222,7 +264,9 @@ function init() {
   });
 
   setupHorizontalScroll();
-  setInterval(updateNowLine, 60000);
+  setInterval(() => {
+      if(state.date === todayISO()) renderTimeline();
+  }, 60000);
 
   loadMeta()
     .then(() => loadDay(state.date))
@@ -232,4 +276,4 @@ function init() {
     });
 }
 
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", init);    

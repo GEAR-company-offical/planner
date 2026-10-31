@@ -55,6 +55,35 @@ main { max-width: 800px; margin: 40px auto; padding: 0 24px; width: 100%; }
 .slot.filled { background: var(--border); border: 2px solid; color: #fff; }
 .slot .cat-letter { font-weight: 800; text-transform: uppercase; }
 
+
+.slot.predicted {
+  background: transparent;
+  border: 2px dashed var(--border);
+  opacity: 0.4;
+  color: var(--muted);
+  cursor: not-allowed; /* Показываем, что кликать нельзя */
+}
+
+.slot.predicted .cat-letter {
+  font-weight: 600;
+}
+
+/* Окрашиваем пунктир в цвет категории, но блекло */
+.slot.predicted.cat-work { border-color: var(--work); }
+.slot.predicted.cat-learning { border-color: var(--learning); }
+.slot.predicted.cat-exercise { border-color: var(--exercise); }
+.slot.predicted.cat-social { border-color: var(--social); }
+.slot.predicted.cat-rest { border-color: var(--rest); }
+.slot.predicted.cat-chores { border-color: var(--chores); }
+
+/* Текущий слот (сейчас) */
+.slot.now-slot {
+  border: 2px solid var(--border);
+  background: rgba(255,255,255,0.05);
+}
+
+
+
 .slot.cat-work { border-color: var(--work); }
 .slot.cat-learning { border-color: var(--learning); }
 .slot.cat-exercise { border-color: var(--exercise); }

@@ -1,10 +1,13 @@
 from contextlib import asynccontextmanager
 from datetime import date
+from datetime import date, datetime, timedelta
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+from fastapi import Depends, FastAPI, HTTPException, Query
+from predictor import generate_future_grid
 
 import crud
 from config import CATEGORIES, SLOTS_PER_DAY, STATIC_DIR
@@ -73,3 +76,31 @@ def update_block(block_id: int, payload: BlockUpdate, db: Session = Depends(get_
 def delete_block(block_id: int, db: Session = Depends(get_db)):
     if not crud.delete_block(db, block_id):
         raise HTTPException(status_code=404, detail="Block not found")
+
+
+
+def _check_is_past(target_date: date, slot_index: int):
+    now = datetime.now()
+    today = now.date()
+    
+    if target_date > today:
+        raise HTTPException(status_code=400, detail="Cannot edit future blocks")
+    if target_date == today:
+        current_slot = (now.hour * 60 + now.minute) // 30
+        if slot_index >= current_slot:
+            raise HTTPException(status_code=400, detail="Cannot edit current or future blocks")
+
+
+@app.post("/blocks", response_model=BlockRead, status_code=201)
+def create_block(payload: BlockCreate, db: Session = Depends(get_db)):
+    _check_is_past(payload.block_date, payload.slot_index) # <-- Защита
+    try:
+        return crud.create_block(db, payload)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@app.get("/predict/{target_date}")
+def get_predictions(target_date: date, db: Session = Depends(get_db)):
+    """Возвращает предсказания для будущего дня."""
+    return generate_future_grid(db, target_date)    
