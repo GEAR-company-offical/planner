@@ -1,92 +1,58 @@
-# 🕒 Day Logger (Smart Time Block Planner)
+# Day Logger — Smart Time Block Planner
 
-Персональный инструмент для трекинга времени с 30-минутной дискретизацией. В отличие от обычных логгеров, приложение анализирует историю активности и предсказывает, чем лучше заняться в будущем, чтобы поддерживать «золотую середину» (баланс между работой, отдыхом и спортом).
+## Overview
 
-**[🔴 Live Demo](https://planner-dutb.onrender.com)** 
+Day Logger is a personal time-tracking application built around 30-minute time blocks. Unlike conventional loggers that merely record past activity, Day Logger analyzes historical patterns and generates context-aware predictions for upcoming blocks, aiming to maintain a balanced distribution across work, rest, exercise, and other categories.
 
-## ✨ Ключевые фичи
+The application is available as a live demo: [https://planner-dutb.onrender.com](https://planner-dutb.onrender.com)
 
-- **Сетка дня на 48 слотов:** День разбит на 48 блоков по 30 минут. Удобный горизонтальный таймлайн с прокруткой колесиком мыши.
-- **Умные предсказания:** Алгоритм анализирует твои паттерны за последние 14 дней и предлагает категорию для будущих блоков.
-- **Балансировка (Day Score):** Система считает "золотую середину" твоего распределения времени и оценивает текущий день по шкале от 0 до 100.
-- **Визуальная аналитика:** Интерактивные графики (Chart.js) показывают распределение категорий и историю твоего баланса.
-- **Темы оформления:** 4 цветовые схемы (Dark, Light, Cyberpunk, Forest) с сохранением выбора в `localStorage`.
-- **Frictionless UX:** Запись блока происходит в один клик, без лишних полей вроде «уровень энергии» или «статус».
+## Key Features
 
-## 🛠 Технологический стек
+- **48-slot daily grid**: Each day is divided into 48 half-hour slots, presented as a scrollable horizontal timeline with mouse-wheel navigation.
+- **ML-driven predictions**: A Random Forest classifier (`scikit-learn`) predicts the most likely category for future blocks based on day of week, hour, and the preceding block.
+- **Day Balance scoring**: The system computes a target distribution from recent history and evaluates the current day on a 0–100 scale, indicating how closely it aligns with the user’s “golden mean.”
+- **Visual analytics**: Four interactive charts (Chart.js) display category distribution, balance history, hourly activity, and day-of-week patterns.
+- **Theme system**: Four color schemes (Midnight, Nord, Light, Matrix) persisted in `localStorage`.
+- **Frictionless UX**: A single click records a block; no extra fields such as “energy level” or “status” are required.
 
-- **Backend:** Python 3.11, FastAPI, SQLAlchemy 2.0, Pydantic
-- **Database:** SQLite (с планами на миграцию в PostgreSQL)
-- **Frontend:** Vanilla JS (ES6+), HTML5, CSS3 (CSS Variables для тем), Chart.js
-- **DevOps:** Docker, Render (Deployment)
-- **Тестирование:** Pytest, Httpx
+## Technology Stack
 
-## 🧠 Как работает алгоритм предсказаний
+- **Backend**: Python 3.11, FastAPI, SQLAlchemy 2.0, Pydantic
+- **Database**: SQLite (migration to PostgreSQL planned)
+- **Frontend**: Vanilla JavaScript (ES6+), HTML5, CSS3 (CSS variables for theming), Chart.js
+- **Machine Learning**: scikit-learn (Random Forest), joblib
+- **DevOps**: Docker, Render
+- **Testing**: Pytest, HTTPX
 
-Алгоритм (в `predictor.py`) не использует LLM. Это классическая эвристика с элементами ML, работающая локально:
+## Architecture and Prediction Algorithm
 
-1. **Сбор статистики:** Система смотрит на последние 14 дней и вычисляет твою *целевую дистрибуцию* (например: 35% сон, 30% работа, 15% отдых).
-2. **Исторический режим:** Для каждого конкретного слота (например, 09:00) проверяется, что ты обычно делал в это время.
-3. **Взвешенный выбор (Weighted Random Choice):** Для каждого слота генерируются веса категорий. Если категория исторически свойственна этому времени — вес повышается. Если в сгенерированном дне этой категории уже слишком много (отклонение от целевой дистрибуции) — вес понижается.
-4. **Результат:** Формируется сбалансированный день, который не дает тебе переработать или пролежать на диване весь день.
+The prediction pipeline consists of two layers:
 
-## 🚀 Локальный запуск
+1. **ML model** (`train_model.py`): A Random Forest classifier is trained on historical blocks using three features — day of week, hour of day, and the encoded category of the previous block. The trained model and its label encoder are serialized to `model.pkl`.
+2. **Balancing and constraints** (`predictor.py`): At inference time, the model’s predicted probabilities are adjusted by:
+   - a **deficit penalty** that discourages over-representation of any category relative to the target distribution;
+   - an **anti-repetition rule** that suppresses three identical consecutive blocks;
+   - a **fallback heuristic** if the model file is unavailable.
 
-**1. Клонируй репозиторий:**
-~~~bash
+The target distribution itself is derived from the last 14 days of activity, excluding nighttime hours (00:00–08:00). This ensures that the algorithm learns from active periods only and does not misinterpret sleep as “rest.”
+
+## Local Setup
+
+### Prerequisites
+
+- Python 3.10+
+- Git
+
+### Steps
+
+```bash
 git clone https://github.com/GEAR-company-offical/planner.git
 cd planner
-~~~
 
-**2. Создай виртуальное окружение и установи зависимости:**
-~~~bash
 python -m venv .venv
 # Windows:
 .\.venv\Scripts\Activate.ps1
-# Mac/Linux:
+# macOS/Linux:
 source .venv/bin/activate
 
 pip install -r requirements.txt
-~~~
-
-**3. Заполни базу тестовыми данными (опционально):**
-~~~bash
-python seed_db.py
-~~~
-
-**4. Запусти сервер:**
-~~~bash
-uvicorn app:app --reload
-~~~
-Приложение будет доступно по адресу: `http://127.0.0.1:8000`
-
-## 🐳 Запуск через Docker
-
-Если у тебя установлен Docker, проект можно запустить одной командой:
-
-~~~bash
-# Сборка образа
-docker build -t day-logger .
-
-# Запуск контейнера
-docker run -p 8000:8000 day-logger
-~~~
-
-## 🧪 Тестирование
-
-Проект покрыт базовыми тестами API (CRUD операции, валидация схем, проверка целостности слотов).
-
-~~~bash
-pytest -v
-~~~
-
-## 🗺 Roadmap (Планы по развитию)
-
-- [ ] Переезд на PostgreSQL для сохранения данных на хостинге (Render использует эфемерный диск).
-- [ ] Telegram-бот для напоминаний каждые 30 минут.
-- [ ] Сбор реального датасета и обучение модели `scikit-learn` (Random Forest) для замены текущей эвристики.
-- [ ] Настройка CI/CD пайплайна через GitHub Actions.
-
-## 📄 Лицензия
-
-Этот проект создан в учебных целях как часть пути в ML Engineering. Используй его как хочешь.
