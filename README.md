@@ -4,7 +4,6 @@
 
 Day Logger is a personal time-tracking application built around 30-minute time blocks. Unlike conventional loggers that merely record past activity, Day Logger analyzes historical patterns and generates context-aware predictions for upcoming blocks, aiming to maintain a balanced distribution across work, rest, exercise, and other categories.
 
-
 ---
 
 ## Key Features
@@ -149,7 +148,4 @@ The application will be available at `http://127.0.0.1:8000`.
 ## License
 
 This project is intended for educational and personal use.
-<<<<<<< HEAD
 
-=======
->>>>>>> b9c89a9b7d0be9d5cce04ab445eef5a9cebc4484
