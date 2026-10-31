@@ -1,8 +1,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* ====== ТЕМЫ ====== */
-:root {
-  /* Темная тема (по умолчанию) */
+:root, [data-theme="dark"] {
   --bg: #121212;
   --fg: #e0e0e0;
   --muted: #888;
@@ -10,7 +9,6 @@
   --card: #1e1e1e;
   --sidebar: #0a0a0a;
   --red: #ef4444;
-  
   --work-rgb: 59, 130, 246;
   --learning-rgb: 139, 92, 246;
   --exercise-rgb: 16, 185, 129;
@@ -19,6 +17,55 @@
   --chores-rgb: 180, 83, 9;
 }
 
+[data-theme="light"] {
+  --bg: #f5f5f7;
+  --fg: #1d1d1f;
+  --muted: #6e6e73;
+  --border: #d2d2d7;
+  --card: #ffffff;
+  --sidebar: #e5e5ea;
+  --red: #ef4444;
+  --work-rgb: 0, 113, 227;
+  --learning-rgb: 139, 92, 246;
+  --exercise-rgb: 16, 185, 129;
+  --social-rgb: 245, 158, 11;
+  --rest-rgb: 107, 114, 128;
+  --chores-rgb: 180, 83, 9;
+}
+
+[data-theme="cyberpunk"] {
+  --bg: #0d0221;
+  --fg: #0ff0fc;
+  --muted: #8b7cc6;
+  --border: #3d1e6d;
+  --card: #1a0b2e;
+  --sidebar: #05010d;
+  --red: #ff00ff;
+  --work-rgb: 255, 0, 255;
+  --learning-rgb: 0, 255, 204;
+  --exercise-rgb: 255, 255, 0;
+  --social-rgb: 255, 102, 0;
+  --rest-rgb: 70, 70, 70;
+  --chores-rgb: 150, 0, 255;
+}
+
+[data-theme="forest"] {
+  --bg: #f0f4f0;
+  --fg: #2c3e2e;
+  --muted: #6b7c6d;
+  --border: #a3b8a4;
+  --card: #ffffff;
+  --sidebar: #dbe4dc;
+  --red: #d32f2f;
+  --work-rgb: 76, 175, 80;
+  --learning-rgb: 121, 85, 72;
+  --exercise-rgb: 0, 150, 136;
+  --social-rgb: 255, 152, 0;
+  --rest-rgb: 158, 158, 158;
+  --chores-rgb: 188, 170, 164;
+}
+
+body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg); height: 100vh; overflow: hidden; transition: background 0.3s, color 0.3s; }
 [data-theme="light"] {
   /* Светлая тема */
   --bg: #f5f5f7;
@@ -174,6 +221,14 @@ body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--f
 .slot.predicted.cat-rest { background: rgba(var(--rest-rgb), 0.05); border-color: rgb(var(--rest-rgb)); }
 .slot.predicted.cat-chores { background: rgba(var(--chores-rgb), 0.05); border-color: rgb(var(--chores-rgb)); }
 
+/* Предсказание для текущего слота (под линией NOW) */
+.slot.now-predicted {
+  opacity: 0.8; /* Чуть ярче, чем будущее */
+  box-shadow: 0 0 12px rgba(var(--fg-rgb, 255, 255, 255), 0.1); /* Легкое свечение */
+  border-style: dashed;
+  border-width: 2px;
+}
+
 .hint { text-align: center; color: var(--muted); font-size: 12px; margin-top: 16px; }
 
 .score-card {
@@ -208,7 +263,11 @@ body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--f
 /* Настройки */
 .settings-box { max-width: 400px; margin: 0 auto; background: var(--card); padding: 24px; border-radius: 8px; border: 1px solid var(--border); }
 .settings-box label { display: block; margin-bottom: 16px; font-weight: bold; }
-.theme-options { display: flex; gap: 12px; }
+.theme-options { 
+  display: grid; 
+  grid-template-columns: 1fr 1fr; 
+  gap: 12px; 
+}
 .theme-btn { flex: 1; padding: 12px; border: 2px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--fg); cursor: pointer; font-size: 14px; }
 .theme-btn.active { border-color: var(--fg); background: #333; }
 

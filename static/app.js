@@ -147,13 +147,18 @@ function renderCharts() {
   const data = state.chartData;
   if (!data) return;
 
-  const isDark = state.theme === "dark";
-  const textColor = isDark ? '#888' : '#6e6e73';
-  const gridColor = isDark ? '#333' : '#d2d2d7';
+  // Читаем цвета прямо из CSS, чтобы графики работали с любой темой
+  const style = getComputedStyle(document.documentElement);
+  const textColor = style.getPropertyValue('--muted').trim();
+  const gridColor = style.getPropertyValue('--border').trim();
+  const pointColor = style.getPropertyValue('--bg').trim();
+  const accentColor = style.getPropertyValue('--exercise-rgb').trim(); // Зеленый из текущей темы
 
   const distLabels = Object.keys(data.distribution);
   const distValues = Object.values(data.distribution);
-  const distBgColors = distLabels.map(c => catColors[c] || '#fff');
+  
+  // Для пончика используем цвета из категорий
+  const distBgColors = distLabels.map(c => `rgba(var(--${c}-rgb), 0.8)`);
 
   if (distChartInstance) distChartInstance.destroy();
   const ctxDist = document.getElementById('distChart').getContext('2d');
@@ -170,10 +175,11 @@ function renderCharts() {
   const ctxHist = document.getElementById('historyChart').getContext('2d');
   historyChartInstance = new Chart(ctxHist, {
     type: 'line',
-    data: { labels: histLabels, datasets: [{ label: 'Day Balance', data: histScores, borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.2)', fill: true, tension: 0.4, pointBackgroundColor: isDark ? '#121212' : '#f5f5f7', pointBorderColor: '#10b981', pointBorderWidth: 2, pointRadius: 4 }] },
+    data: { labels: histLabels, datasets: [{ label: 'Day Balance', data: histScores, borderColor: `rgb(${accentColor})`, backgroundColor: `rgba(${accentColor}, 0.2)`, fill: true, tension: 0.4, pointBackgroundColor: pointColor, pointBorderColor: `rgb(${accentColor})`, pointBorderWidth: 2, pointRadius: 4 }] },
     options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 100, grid: { color: gridColor }, ticks: { color: textColor } }, x: { grid: { display: false }, ticks: { color: textColor } } }, plugins: { legend: { display: false } } }
   });
 }
+
 
 function renderCalendar() {
   const grid = document.getElementById("calendar-grid");
@@ -227,13 +233,16 @@ function renderTimeline() {
 
     let isPast = state.date < todayStr || (state.date === todayStr && i < currentSlot);
     let isFuture = state.date > todayStr || (state.date === todayStr && i > currentSlot);
+    let isNow = state.date === todayStr && i === currentSlot;
 
     if (block) {
       div.classList.add("filled", `cat-${block.category}`);
       div.innerHTML = `<span class="cat-letter">${block.category.charAt(0).toUpperCase()}</span>`;
       if (isPast) div.addEventListener("click", () => openModal(slot, i));
-    } else if (isFuture && prediction) {
+    } else if ((isFuture || isNow) && prediction) {
+      // Показываем предсказание и для будущего, и для текущего момента
       div.classList.add("predicted", `cat-${prediction.category}`);
+      if (isNow) div.classList.add("now-predicted");
       div.innerHTML = `<span class="cat-letter">${prediction.category.charAt(0).toUpperCase()}</span>`;
     } else if (isPast) {
       div.classList.add("empty");

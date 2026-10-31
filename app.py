@@ -88,3 +88,6 @@ def get_score(target_date: date, db: Session = Depends(get_db)):
 @app.get("/charts/{target_date}")
 def get_charts(target_date: date, db: Session = Depends(get_db)):
     return get_chart_data(db, target_date)
+
+
+
