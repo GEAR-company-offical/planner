@@ -9,9 +9,8 @@ Day Logger is a personal time-tracking application built around 30-minute time b
 
 ![alt text](src/image-1.png)
 
-![alt text](src/image-2.png)
-
 ![alt text](src/image-3.png)
+
 ---
 
 ## Key Features
