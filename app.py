@@ -2,10 +2,12 @@ from contextlib import asynccontextmanager
 from datetime import date
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 import crud
-from config import CATEGORIES, STATUSES, SLOTS_PER_DAY
+from config import CATEGORIES, STATUSES, SLOTS_PER_DAY, STATIC_DIR
 from database import get_db, init_db
 from schemas import BlockCreate, BlockRead, BlockUpdate, DayGrid
 
@@ -18,10 +20,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Time Block Planner",
-    version="0.1.0",
+    version="0.2.0",
     description="48-slot day grid with category tracking",
     lifespan=lifespan,
 )
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/", include_in_schema=False)
+def index():
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.get("/health")

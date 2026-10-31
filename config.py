@@ -16,3 +16,7 @@ CATEGORIES = [
 ]
 
 STATUSES = ["done", "skipped", "planned"]
+
+
+STATIC_DIR = BASE_DIR / "static"
+STATIC_DIR.mkdir(exist_ok=True)
