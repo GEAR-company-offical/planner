@@ -7,15 +7,12 @@ Day Logger is a personal time-tracking application built around 30-minute time b
 ---
 
 ## Key Features
-
-- **48-slot daily grid** — Each day is divided into 48 half-hour slots, presented as a scrollable horizontal timeline with mouse-wheel navigation.
-- **ML-driven predictions** — A Random Forest classifier (`scikit-learn`) predicts the most likely category for future blocks based on day of week, hour, and the preceding block.
-- **Day Balance scoring** — The system computes a target distribution from recent history and evaluates the current day on a 0–100 scale, indicating how closely it aligns with the user's "golden mean."
-- **Visual analytics** — Four interactive charts (Chart.js) display category distribution, balance history, hourly activity, and day-of-week patterns.
-- **Theme system** — Four color schemes (Midnight, Nord, Light, Matrix) persisted in `localStorage`.
-- **Frictionless UX** — A single click records a block; no extra fields such as "energy level" or "status" are required.
-- **Active window** — Only the hours from 08:00 to 24:00 are considered active and used in analytics and predictions; nighttime (00:00–08:00) is excluded so that sleep is not misclassified as rest.
-
+- **32-slot active day grid**: The active tracking window is from 08:00 to 24:00 (32 half-hour blocks). Nighttime (00:00–08:00) is excluded from tracking and analytics to prevent sleep from skewing the balance of "rest" activities.
+- **ML-driven predictions**: A Random Forest classifier (`scikit-learn`) predicts the most likely category for future blocks based on the day of the week, hour of the day, and the preceding block.
+- **Day Balance scoring**: The system computes a target distribution from recent history and evaluates the current day on a 0–100 scale, indicating how closely it aligns with the user's "golden mean".
+- **Visual analytics**: Four interactive charts (Chart.js) display category distribution, balance history, hourly activity, and day-of-week patterns.
+- **Theme system**: Four color schemes (Midnight, Nord, Light, Matrix) persisted in `localStorage`.
+- **Frictionless UX**: A single click records a block; no extra fields such as "energy level" or "status" are required.
 ---
 
 ## Technology Stack
