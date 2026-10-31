@@ -53,8 +53,6 @@ async function loadDay(date) {
   ]);
   state.grid = grid;
   state.predictions = preds;
-  
-  // Сбрасываем автоскролл при смене даты
   window.hasAutoScrolled = false;
   render();
 }
@@ -78,8 +76,8 @@ function renderStats() {
 }
 
 function renderTimeline() {
-  const el = document.getElementById("timeline");
-  el.innerHTML = "";
+  const timelineEl = document.getElementById("timeline");
+  timelineEl.innerHTML = "";
 
   const todayStr = todayISO();
   const currentSlot = getCurrentSlot();
@@ -93,7 +91,6 @@ function renderTimeline() {
     div.className = "slot";
     div.dataset.index = i;
 
-    // Определяем статус времени
     let isPast = state.date < todayStr || (state.date === todayStr && i < currentSlot);
     let isFuture = state.date > todayStr || (state.date === todayStr && i > currentSlot);
 
@@ -111,50 +108,41 @@ function renderTimeline() {
       div.classList.add("empty", "now-slot");
     }
 
-    el.appendChild(div);
+    timelineEl.appendChild(div);
   }
 
-  // Настраиваем начальный скролл и слушатели
   setTimeout(initScrollLogic, 50);
 }
 
 function initScrollLogic() {
-  const timeline = document.getElementById("timeline");
-  const slotWidth = 64;
-  const gap = 8;
-  const step = slotWidth + gap;
+  const scrollEl = document.getElementById("timeline-scroll");
+  const step = 64 + 8;
 
-  // Автоскролл к текущему времени при загрузке
   if (!window.hasAutoScrolled) {
     const targetIdx = state.date === todayISO() ? getCurrentSlot() : 0;
-    // Центрируем целевой блок
-    timeline.scrollLeft = targetIdx * step;
+    scrollEl.scrollLeft = targetIdx * step;
     window.hasAutoScrolled = true;
     updateActiveTime(targetIdx);
   }
 
-  // Слушаем скролл для обновления верхнего времени
   let scrollTimeout;
-  timeline.onscroll = () => {
+  scrollEl.onscroll = () => {
     clearTimeout(scrollTimeout);
     scrollTimeout = setTimeout(() => {
-      // Вычисляем, какой блок сейчас ровно по центру
-      const centerIdx = Math.round(timeline.scrollLeft / step);
+      const centerIdx = Math.round(scrollEl.scrollLeft / step);
       const safeIdx = Math.max(0, Math.min(47, centerIdx));
       updateActiveTime(safeIdx);
     }, 50);
   };
 
-  // Перехват колесика (шаг ровно на 1 блок)
-  timeline.onwheel = (e) => {
+  document.querySelector(".timeline-wrapper").onwheel = (e) => {
     e.preventDefault();
     const direction = e.deltaY > 0 ? 1 : -1;
-    const currentIdx = Math.round(timeline.scrollLeft / step);
+    const currentIdx = Math.round(scrollEl.scrollLeft / step);
     let nextIdx = currentIdx + direction;
     nextIdx = Math.max(0, Math.min(47, nextIdx));
     
-    // Прокручиваем ровно к следующему блоку
-    timeline.scrollTo({ left: nextIdx * step, behavior: 'smooth' });
+    scrollEl.scrollTo({ left: nextIdx * step, behavior: 'smooth' });
   };
 }
 
@@ -163,7 +151,6 @@ function updateActiveTime(index) {
   const timeDisplay = document.getElementById("active-time");
   timeDisplay.textContent = slotToTime(index);
 
-  // Подсвечиваем красным, если это "сейчас"
   if (state.date === todayISO() && index === getCurrentSlot()) {
     timeDisplay.classList.add("is-now");
   } else {
@@ -205,32 +192,22 @@ function renderCategorySelect() {
 
 async function saveBlock(category) {
   const { block, index } = state.editing;
-  
   try {
     if (block) {
       await fetchJSON(`/blocks/${block.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ category }),
       });
     } else {
       await fetchJSON("/blocks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          block_date: state.date,
-          slot_index: index,
-          category,
-        }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ block_date: state.date, slot_index: index, category }),
       });
     }
     closeModal();
     await loadDay(state.date);
-    // Возвращаем скролл на то же место после перерисовки
-    document.getElementById("timeline").scrollLeft = index * (64 + 8);
-  } catch (e) {
-    alert(`Error: ${e.message}`);
-  }
+    document.getElementById("timeline-scroll").scrollLeft = index * 72;
+  } catch (e) { alert(`Error: ${e.message}`); }
 }
 
 async function deleteBlock() {
@@ -242,10 +219,8 @@ async function deleteBlock() {
     const index = state.editing.index;
     closeModal();
     await loadDay(state.date);
-    document.getElementById("timeline").scrollLeft = index * (64 + 8);
-  } catch (e) {
-    alert(`Error: ${e.message}`);
-  }
+    document.getElementById("timeline-scroll").scrollLeft = index * 72;
+  } catch (e) { alert(`Error: ${e.message}`); }
 }
 
 function closeModal() {
@@ -276,12 +251,10 @@ function init() {
       if(state.date === todayISO()) updateActiveTime(state.activeSlotIndex);
   }, 60000);
 
-  loadMeta()
-    .then(() => loadDay(state.date))
-    .catch(err => {
+  loadMeta().then(() => loadDay(state.date)).catch(err => {
       document.getElementById("timeline").innerHTML =
         `<p style="color:#ef4444;padding:16px">Failed to load: ${escapeHtml(err.message)}</p>`;
-    });
+  });
 }
 
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", init);    
