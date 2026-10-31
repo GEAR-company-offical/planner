@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 
 import crud
-from config import CATEGORIES, SLOTS_PER_DAY, STATIC_DIR
+from config import CATEGORIES, SLOTS_PER_DAY, STATIC_DIR, DAY_START_SLOT
 from database import get_db, init_db
 from schemas import BlockCreate, BlockRead, BlockUpdate, DayGrid
 from predictor import generate_smart_grid, calculate_day_score, get_chart_data, get_calendar_heatmap
@@ -94,3 +94,8 @@ def get_charts(target_date: date, db: Session = Depends(get_db)):
 def get_calendar(end_date: date, db: Session = Depends(get_db)):
     return get_calendar_heatmap(db, end_date)
 
+
+def _check_is_past(target_date: date, slot_index: int):
+    if slot_index < DAY_START_SLOT:
+        raise HTTPException(status_code=400, detail="Cannot log night time (00:00-08:00)")
+    # ... остальная логика

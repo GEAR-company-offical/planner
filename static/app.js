@@ -274,7 +274,8 @@ function renderTimeline() {
   const todayStr = todayISO();
   const currentSlot = getCurrentSlot();
 
-  for (let i = 0; i < 48; i++) {
+  // Отрисовываем только с 16 по 47 слот (с 08:00 до 23:30)
+  for (let i = 16; i < 48; i++) {
     const slot = state.grid.slots[i];
     const block = slot.block;
     const prediction = state.predictions[i];
@@ -287,12 +288,12 @@ function renderTimeline() {
     let isFuture = state.date > todayStr || (state.date === todayStr && i > currentSlot);
     let isNow = state.date === todayStr && i === currentSlot;
 
+    // Если сейчас ночь, линия NOW будет за пределами сетки, это нормально
     if (block) {
       div.classList.add("filled", `cat-${block.category}`);
       div.innerHTML = `<span class="cat-letter">${block.category.charAt(0).toUpperCase()}</span>`;
       if (isPast) div.addEventListener("click", () => openModal(slot, i));
     } else if ((isFuture || isNow) && prediction) {
-      // Показываем предсказание и для будущего, и для текущего момента
       div.classList.add("predicted", `cat-${prediction.category}`);
       if (isNow) div.classList.add("now-predicted");
       div.innerHTML = `<span class="cat-letter">${prediction.category.charAt(0).toUpperCase()}</span>`;
@@ -309,15 +310,20 @@ function renderTimeline() {
   setTimeout(initScrollLogic, 50);
 }
 
+
 function initScrollLogic() {
   const scrollEl = document.getElementById("timeline-scroll");
   const step = 64 + 8; 
 
-  if (!window.hasAutoScrolled) {
-    const targetIdx = state.date === todayISO() ? getCurrentSlot() : 0;
+    if (!window.hasAutoScrolled) {
+    // Если сейчас день, и время > 08:00, скроллим к текущему
+    let targetIdx = 0;
+    if (state.date === todayISO() && getCurrentSlot() >= 16) {
+       targetIdx = getCurrentSlot() - 16;
+    }
     scrollEl.scrollTo({ left: targetIdx * step, behavior: 'auto' });
     window.hasAutoScrolled = true;
-    updateActiveTime(targetIdx);
+    updateActiveTime(targetIdx + 16);
   }
 
   let scrollTimeout;
