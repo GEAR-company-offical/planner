@@ -17,17 +17,27 @@
 
   <div class="stats" id="stats"></div>
 
-  <main>
-    <div class="timeline-wrapper">
-      <div class="timeline-header">
-        <div class="time-display" id="active-time">00:00</div>
+  <main class="layout-container">
+    <!-- Левая колонка: Логгер -->
+    <div class="timeline-col">
+      <div class="timeline-wrapper">
+        <div class="timeline-header">
+          <div class="time-display" id="active-time">00:00</div>
+        </div>
+        <div class="playhead"></div>
+        <div class="timeline-scroll" id="timeline-scroll">
+          <div class="blocks" id="timeline"></div>
+        </div>
       </div>
-      <div class="playhead"></div>
-      <div class="timeline-scroll" id="timeline-scroll">
-        <div class="blocks" id="timeline"></div>
+      <p class="hint">Крути колесико мыши, чтобы листать по 30 минут →</p>
+    </div>
+
+    <!-- Правая колонка: Только поинты -->
+    <div class="score-col">
+      <div class="score-card">
+        <div class="score-circle" id="score-value">0</div>
       </div>
     </div>
-    <p class="hint">Крути колесико мыши, чтобы листать по 30 минут →</p>
   </main>
 
   <div class="modal" id="modal" hidden>

@@ -32,19 +32,46 @@ header h1 { font-size: 18px; margin-right: auto; }
 .stats { display: flex; gap: 24px; padding: 12px 24px; background: var(--card); border-bottom: 1px solid var(--border); font-size: 13px; color: var(--muted); }
 .stats b { color: var(--fg); }
 
-main { max-width: 550px; margin: 40px auto; padding: 0 24px; width: 100%; }
+/* ====== ЦЕНТРИРОВАННЫЙ LAYOUT ====== */
+.layout-container {
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  gap: 24px;
+  
+  max-width: 800px; /* Уменьшили общую ширину страницы */
+  width: 100%;
+  margin: 40px auto;
+  padding: 0 24px;
+  align-items: start;
+}
 
-/* ====== КОНТЕЙНЕР ТАЙМЛАЙНА ====== */
+
+/* Адаптив для маленьких экранов */
+@media (max-width: 768px) {
+  .layout-container {
+    grid-template-columns: 1fr; /* В одну колонку */
+  }
+  .score-col {
+    order: -1; /* Поинты наверх */
+  }
+}
+
+
+/* ====== ТАЙМЛАЙН ====== */
 .timeline-wrapper {
   border: 2px solid var(--fg);
   border-radius: 8px;
   background: var(--card);
   position: relative;
   overflow: hidden;
-  height: 130px; /* Фиксированная высота для всей рамки */
+  height: 130px;
+  
+  /* ВОТ ГЛАВНОЕ ИСПРАВЛЕНИЕ: */
+  max-width: 580px; /* Ограничиваем ширину самого окна логгера */
+  width: 100%;      /* На мобильных сожмется */
+  margin: 0 auto;   /* Центрируем внутри левой колонки */
 }
 
-/* Верхняя статичная панель */
 .timeline-header {
   position: absolute; top: 0; left: 0; right: 0; height: 44px;
   background: var(--card); border-bottom: 1px solid var(--border);
@@ -57,32 +84,24 @@ main { max-width: 550px; margin: 40px auto; padding: 0 24px; width: 100%; }
 }
 .time-display.is-now { color: var(--red); border-color: var(--red); }
 
-/* Красная линия */
 .playhead {
   position: absolute; top: 44px; bottom: 0; left: 50%;
   width: 2px; background: var(--red); transform: translateX(-50%);
   z-index: 5; pointer-events: none;
 }
 
-/* Контейнер прокрутки */
 .timeline-scroll {
   width: 100%; height: 100%; overflow-x: auto; overflow-y: hidden;
   scroll-snap-type: x mandatory; scroll-behavior: smooth;
   scrollbar-width: none;
-  
-  /* ВЕРТИКАЛЬНОЕ ЦЕНТРИРОВАНИЕ */
   display: flex;
   align-items: center;
-  padding-top: 44px; /* Отступ, чтобы не заезжать под шапку */
+  padding-top: 44px; 
 }
 .timeline-scroll::-webkit-scrollbar { display: none; }
 
-/* ====== БЛОКИ ====== */
 .blocks {
-  display: flex; 
-  gap: 8px; 
-  padding: 0 calc(50% - 32px); /* Только горизонтальные отступы */
-  align-items: center;
+  display: flex; gap: 8px; padding: 0 calc(50% - 32px); align-items: center;
 }
 
 .slot {
@@ -96,7 +115,6 @@ main { max-width: 550px; margin: 40px auto; padding: 0 24px; width: 100%; }
 .slot.empty { border: 1px dashed var(--border); background: transparent; }
 .slot .cat-letter { font-weight: 800; text-transform: uppercase; color: #fff; }
 
-/* Заполненные блоки */
 .slot.filled { border: 2px solid; }
 .slot.filled.cat-work { background: rgba(var(--work-rgb), 0.15); border-color: rgb(var(--work-rgb)); }
 .slot.filled.cat-learning { background: rgba(var(--learning-rgb), 0.15); border-color: rgb(var(--learning-rgb)); }
@@ -105,7 +123,6 @@ main { max-width: 550px; margin: 40px auto; padding: 0 24px; width: 100%; }
 .slot.filled.cat-rest { background: rgba(var(--rest-rgb), 0.15); border-color: rgb(var(--rest-rgb)); }
 .slot.filled.cat-chores { background: rgba(var(--chores-rgb), 0.15); border-color: rgb(var(--chores-rgb)); }
 
-/* Предсказания */
 .slot.predicted { border: 2px dashed; opacity: 0.4; cursor: not-allowed; }
 .slot.predicted.cat-work { background: rgba(var(--work-rgb), 0.05); border-color: rgb(var(--work-rgb)); }
 .slot.predicted.cat-learning { background: rgba(var(--learning-rgb), 0.05); border-color: rgb(var(--learning-rgb)); }
@@ -116,6 +133,36 @@ main { max-width: 550px; margin: 40px auto; padding: 0 24px; width: 100%; }
 
 .hint { text-align: center; color: var(--muted); font-size: 12px; margin-top: 16px; }
 
+/* ====== КАРТОЧКА ПОИНТОВ ====== */
+.score-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.score-circle {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 4px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: bold;
+  color: var(--fg);
+  transition: all 0.3s ease;
+}
+
+.score-circle.good { border-color: var(--exercise); color: var(--exercise); }
+.score-circle.mid { border-color: var(--social); color: var(--social); }
+.score-circle.bad { border-color: var(--red); color: var(--red); }
+
 /* Модалка */
 .modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
 .modal[hidden] { display: none; }
@@ -124,22 +171,6 @@ main { max-width: 550px; margin: 40px auto; padding: 0 24px; width: 100%; }
 .category-select { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 .category-btn { padding: 16px; border: 2px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--fg); cursor: pointer; font: inherit; font-size: 14px; font-weight: 600; text-transform: uppercase; }
 .category-btn:hover { border-color: var(--fg); background: #333; }
-.modal-actions {
-  display: flex;
-  justify-content: center; /* Центрируем кнопку удаления */
-  margin-top: 24px;
-}
-.modal-actions button#delete-btn {
-  padding: 10px 24px;
-  border-radius: 6px;
-  border: 1px solid var(--red);
-  background: var(--bg);
-  color: var(--red);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  width: 100%; /* Кнопка на всю ширину для удобства */
-}
-.modal-actions button#delete-btn:hover {
-  background: rgba(239, 68, 68, 0.1);
-}
+.modal-actions { display: flex; justify-content: center; margin-top: 24px; }
+.modal-actions button#delete-btn { padding: 10px 24px; border-radius: 6px; border: 1px solid var(--red); background: var(--bg); color: var(--red); font: inherit; font-weight: 600; cursor: pointer; width: 100%; }
+.modal-actions button#delete-btn:hover { background: rgba(239, 68, 68, 0.1); }

@@ -2,12 +2,16 @@ from contextlib import asynccontextmanager
 from datetime import date
 from datetime import date, datetime, timedelta
 
+
+
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from fastapi import Depends, FastAPI, HTTPException, Query
-from predictor import generate_future_grid
+from predictor import generate_smart_grid
+from predictor import generate_smart_grid, calculate_day_score
+
 
 import crud
 from config import CATEGORIES, SLOTS_PER_DAY, STATIC_DIR
@@ -103,4 +107,10 @@ def create_block(payload: BlockCreate, db: Session = Depends(get_db)):
 @app.get("/predict/{target_date}")
 def get_predictions(target_date: date, db: Session = Depends(get_db)):
     """Возвращает предсказания для будущего дня."""
-    return generate_future_grid(db, target_date)    
+    return generate_smart_grid(db, target_date)    
+
+
+
+@app.get("/score/{target_date}")
+def get_score(target_date: date, db: Session = Depends(get_db)):
+    return calculate_day_score(db, target_date)
