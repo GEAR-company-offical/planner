@@ -1,4 +1,4 @@
-```markdown
+
 # Day Logger — Smart Time Block Planner
 
 Day Logger is a personal time-tracking application built around 30-minute time blocks. Unlike conventional loggers that merely record past activity, Day Logger analyzes historical patterns and generates context-aware predictions for upcoming blocks, aiming to maintain a balanced distribution across work, rest, exercise, and other categories.
@@ -47,7 +47,6 @@ The target distribution itself is derived from the last 14 days of activity, exc
 
 ## Project Structure
 
-```
 planner/
 ├── app.py                  # FastAPI application entry point
 ├── config.py               # Constants: slot counts, active window, categories
