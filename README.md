@@ -4,7 +4,6 @@
 
 Day Logger is a personal time-tracking application built around 30-minute time blocks. Unlike conventional loggers that merely record past activity, Day Logger analyzes historical patterns and generates context-aware predictions for upcoming blocks, aiming to maintain a balanced distribution across work, rest, exercise, and other categories.
 
-**Live demo:** [https://planner-dutb.onrender.com](https://planner-dutb.onrender.com)
 
 ---
 
