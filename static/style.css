@@ -174,3 +174,31 @@ header h1 { font-size: 18px; margin-right: auto; }
 .modal-actions { display: flex; justify-content: center; margin-top: 24px; }
 .modal-actions button#delete-btn { padding: 10px 24px; border-radius: 6px; border: 1px solid var(--red); background: var(--bg); color: var(--red); font: inherit; font-weight: 600; cursor: pointer; width: 100%; }
 .modal-actions button#delete-btn:hover { background: rgba(239, 68, 68, 0.1); }
+
+
+
+.charts-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 32px;
+}
+
+/* Если экран маленький — графики друг под другом */
+@media (max-width: 600px) {
+  .charts-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chart-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  position: relative;
+  height: 220px; /* Фиксируем высоту, чтобы Chart.js не схлопывался */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

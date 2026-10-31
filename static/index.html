@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Day Logger</title>
   <link rel="stylesheet" href="/static/style.css">
+  <!-- Подключаем Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <header>
@@ -30,9 +32,19 @@
         </div>
       </div>
       <p class="hint">Крути колесико мыши, чтобы листать по 30 минут →</p>
+
+      <!-- НОВЫЙ БЛОК: ГРАФИКИ -->
+      <div class="charts-container">
+        <div class="chart-box">
+          <canvas id="distChart"></canvas>
+        </div>
+        <div class="chart-box">
+          <canvas id="historyChart"></canvas>
+        </div>
+      </div>
     </div>
 
-    <!-- Правая колонка: Только поинты -->
+    <!-- Правая колонка: Поинты -->
     <div class="score-col">
       <div class="score-card">
         <div class="score-circle" id="score-value">0</div>

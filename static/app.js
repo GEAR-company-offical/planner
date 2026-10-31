@@ -4,8 +4,21 @@ const state = {
   grid: null,
   predictions: null,
   scoreData: null,
+  chartData: null,
   editing: null,
   activeSlotIndex: 0,
+};
+
+let distChartInstance = null;
+let historyChartInstance = null;
+
+const catColors = {
+  work: 'rgba(59, 130, 246, 0.8)',
+  learning: 'rgba(139, 92, 246, 0.8)',
+  exercise: 'rgba(16, 185, 129, 0.8)',
+  social: 'rgba(245, 158, 11, 0.8)',
+  rest: 'rgba(107, 114, 128, 0.8)',
+  chores: 'rgba(180, 83, 9, 0.8)'
 };
 
 function todayISO() {
@@ -32,14 +45,14 @@ function escapeHtml(s) {
 }
 
 async function fetchJSON(url, options) {
-  // cache: 'no-store' заставляет браузер всегда запрашивать свежие данные с сервера
-  const r = await fetch(url, { cache: 'no-store', ...options });
+  // Добавляем случайный параметр, чтобы браузер 100% не кэшировал
+  const separator = url.includes('?') ? '&' : '?';
+  const noCacheUrl = `${url}${separator}_t=${Date.now()}`;
+  
+  const r = await fetch(noCacheUrl, { cache: 'no-store', ...options });
   if (!r.ok) {
     let detail = `HTTP ${r.status}`;
-    try { 
-      const body = await r.json(); 
-      if (body.detail) detail = body.detail; 
-    } catch (_) {}
+    try { const body = await r.json(); if (body.detail) detail = body.detail; } catch (_) {}
     throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
   }
   return r.status === 204 ? null : r.json();
@@ -52,14 +65,17 @@ async function loadMeta() {
 
 async function loadDay(date) {
   state.date = date;
-  const [grid, preds, score] = await Promise.all([
+  const [grid, preds, score, charts] = await Promise.all([
     fetchJSON(`/days/${date}`),
     fetchJSON(`/predict/${date}`),
-    fetchJSON(`/score/${date}`)
+    fetchJSON(`/score/${date}`),
+    fetchJSON(`/charts/${date}`)
   ]);
   state.grid = grid;
   state.predictions = preds;
   state.scoreData = score;
+  state.chartData = charts;
+  
   render();
 }
 
@@ -67,6 +83,7 @@ function render() {
   renderStats();
   renderTimeline();
   renderScore();
+  renderCharts();
 }
 
 function renderStats() {
@@ -98,6 +115,58 @@ function renderScore() {
   if (data.score >= 80) scoreEl.classList.add("good");
   else if (data.score >= 50) scoreEl.classList.add("mid");
   else scoreEl.classList.add("bad");
+}
+
+function renderCharts() {
+  const data = state.chartData;
+  if (!data) return;
+
+  const distLabels = Object.keys(data.distribution);
+  const distValues = Object.values(data.distribution);
+  const distBgColors = distLabels.map(c => catColors[c] || '#fff');
+
+  if (distChartInstance) distChartInstance.destroy();
+  
+  const ctxDist = document.getElementById('distChart').getContext('2d');
+  distChartInstance = new Chart(ctxDist, {
+    type: 'doughnut',
+    data: {
+      labels: distLabels,
+      datasets: [{ data: distValues, backgroundColor: distBgColors, borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '70%',
+      plugins: { legend: { position: 'right', labels: { color: '#888', font: {size: 11} } } }
+    }
+  });
+
+  const histLabels = data.history.map(h => h.date);
+  const histScores = data.history.map(h => h.score);
+
+  if (historyChartInstance) historyChartInstance.destroy();
+
+  const ctxHist = document.getElementById('historyChart').getContext('2d');
+  historyChartInstance = new Chart(ctxHist, {
+    type: 'line',
+    data: {
+      labels: histLabels,
+      datasets: [{
+        label: 'Day Balance', data: histScores,
+        borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.2)',
+        fill: true, tension: 0.4,
+        pointBackgroundColor: '#121212', pointBorderColor: '#10b981',
+        pointBorderWidth: 2, pointRadius: 4
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        y: { min: 0, max: 100, grid: { color: '#333' }, ticks: { color: '#888' } },
+        x: { grid: { display: false }, ticks: { color: '#888' } }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
 }
 
 function renderTimeline() {
@@ -141,9 +210,8 @@ function renderTimeline() {
 
 function initScrollLogic() {
   const scrollEl = document.getElementById("timeline-scroll");
-  const step = 64 + 8; // 72px
+  const step = 64 + 8; 
 
-  // Автоскролл при первой загрузке или смене даты
   if (!window.hasAutoScrolled) {
     const targetIdx = state.date === todayISO() ? getCurrentSlot() : 0;
     scrollEl.scrollTo({ left: targetIdx * step, behavior: 'auto' });
@@ -161,14 +229,12 @@ function initScrollLogic() {
     }, 50);
   };
 
-  // Прокрутка ровно на 1 блок (30 минут) за тик колесика
   document.querySelector(".timeline-wrapper").onwheel = (e) => {
     e.preventDefault();
     const direction = e.deltaY > 0 ? 1 : -1; 
     const currentIdx = Math.round(scrollEl.scrollLeft / step);
     let nextIdx = currentIdx + direction;
     nextIdx = Math.max(0, Math.min(47, nextIdx));
-    
     scrollEl.scrollTo({ left: nextIdx * step, behavior: 'smooth' });
   };
 }
@@ -187,7 +253,6 @@ function updateActiveTime(index) {
 
 function openModal(slot, index) {
   state.editing = { slot, block: slot.block, index };
-  
   const title = document.getElementById("modal-title");
   const deleteBtn = document.getElementById("delete-btn");
   
@@ -206,7 +271,6 @@ function openModal(slot, index) {
 function renderCategorySelect() {
   const container = document.getElementById("category-select");
   container.innerHTML = "";
-
   for (const cat of state.categories) {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -232,16 +296,14 @@ async function saveBlock(category) {
       });
     }
     closeModal();
-    
-    // Предотвращаем автоскролл к NOW при обновлении данных
     window.hasAutoScrolled = true; 
+    
+    // Перезагружаем день, чтобы обновить ВСЕ данные, включая Score и графики
     await loadDay(state.date);
     
-    // Возвращаем скролл на место
     const scrollEl = document.getElementById("timeline-scroll");
     scrollEl.scrollTo({ left: index * (64 + 8), behavior: 'auto' });
     updateActiveTime(index);
-
   } catch (e) { alert(`Error: ${e.message}`); }
 }
 
@@ -253,16 +315,12 @@ async function deleteBlock() {
     await fetchJSON(`/blocks/${state.editing.block.id}`, { method: "DELETE" });
     const index = state.editing.index;
     closeModal();
-    
-    // Предотвращаем автоскролл к NOW при обновлении данных
     window.hasAutoScrolled = true;
     await loadDay(state.date);
     
-    // Возвращаем скролл на место
     const scrollEl = document.getElementById("timeline-scroll");
     scrollEl.scrollTo({ left: index * (64 + 8), behavior: 'auto' });
     updateActiveTime(index);
-
   } catch (e) { alert(`Error: ${e.message}`); }
 }
 
@@ -289,12 +347,10 @@ function init() {
 
   document.getElementById("delete-btn").addEventListener("click", deleteBlock);
   
-  // Закрытие модалки по клику на фон
   document.getElementById("modal").addEventListener("click", e => {
     if (e.target.id === "modal") closeModal();
   });
 
-  // Обновляем время в шапке раз в минуту, если открыт сегодняшний день
   setInterval(() => {
       if(state.date === todayISO()) updateActiveTime(state.activeSlotIndex);
   }, 60000);
