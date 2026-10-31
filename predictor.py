@@ -128,3 +128,52 @@ def get_chart_data(db: Session, target_date: date) -> dict:
         history.append({"date": d.strftime("%d.%m"), "score": score, "has_data": len(day_blocks) > 0})
 
     return {"distribution": dict(counts), "history": history}
+
+
+
+def get_calendar_heatmap(db: Session, end_date: date, days: int = 120) -> list[dict]:
+    """Генерирует данные для GitHub-style календаря."""
+    db.expire_all()
+    start_date = end_date - timedelta(days=days)
+    
+    stmt = select(Block).where(
+        Block.block_date >= start_date,
+        Block.block_date <= end_date
+    )
+    blocks = list(db.scalars(stmt))
+    
+    # Группируем блоки по датам
+    blocks_by_date = defaultdict(list)
+    for b in blocks:
+        blocks_by_date[b.block_date].append(b.category)
+
+    result = []
+    current_date = start_date
+    while current_date <= end_date:
+        day_cats = blocks_by_date.get(current_date, [])
+        
+        if day_cats:
+            counts = Counter(day_cats)
+            # Доминирующая категория
+            dominant = counts.most_common(1)[0][0]
+            total = len(day_cats)
+            
+            # Считаем скор именно для этого дня
+            actual = {cat: count / total for cat, count in counts.items()}
+            target = get_target_distribution(db, current_date)
+            diff = sum(abs(actual.get(c, 0) - target.get(c, 0)) for c in set(actual) | set(target))
+            score = max(0, int(100 * (1 - (diff / 2.0))))
+        else:
+            dominant = None
+            total = 0
+            score = 0
+
+        result.append({
+            "date": current_date.strftime("%Y-%m-%d"),
+            "dominant": dominant,
+            "filled": total,
+            "score": score
+        })
+        current_date += timedelta(days=1)
+
+    return result

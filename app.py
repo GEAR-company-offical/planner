@@ -6,11 +6,12 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
+
 import crud
 from config import CATEGORIES, SLOTS_PER_DAY, STATIC_DIR
 from database import get_db, init_db
 from schemas import BlockCreate, BlockRead, BlockUpdate, DayGrid
-from predictor import generate_smart_grid, calculate_day_score, get_chart_data
+from predictor import generate_smart_grid, calculate_day_score, get_chart_data, get_calendar_heatmap
 
 
 @asynccontextmanager
@@ -89,5 +90,7 @@ def get_score(target_date: date, db: Session = Depends(get_db)):
 def get_charts(target_date: date, db: Session = Depends(get_db)):
     return get_chart_data(db, target_date)
 
-
+@app.get("/calendar/{end_date}")
+def get_calendar(end_date: date, db: Session = Depends(get_db)):
+    return get_calendar_heatmap(db, end_date)
 

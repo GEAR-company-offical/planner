@@ -60,9 +60,20 @@
 
       <!-- ВКЛАДКА 2: КАЛЕНДАРЬ -->
       <div id="view-calendar" class="view">
-        <h2>Calendar Overview</h2>
-        <div id="calendar-grid" class="calendar-grid">
-          <!-- JS сгенерирует календарь здесь -->
+        <div class="heatmap-section">
+          <h3>Activity Density</h3>
+          <p class="heatmap-desc">Цвет категории. Яркость = количество заполненных блоков.</p>
+          <div class="heatmap-scroll">
+            <div id="heatmap-activity" class="heatmap-grid"></div>
+          </div>
+        </div>
+
+        <div class="heatmap-section">
+          <h3>Day Balance</h3>
+          <p class="heatmap-desc">Яркость = эффективность дня (0-100).</p>
+          <div class="heatmap-scroll">
+            <div id="heatmap-score" class="heatmap-grid"></div>
+          </div>
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 const state = {
+  calendarData: null,
   date: todayISO(),
   categories: [],
   grid: null,
@@ -181,39 +182,90 @@ function renderCharts() {
 }
 
 
-function renderCalendar() {
-  const grid = document.getElementById("calendar-grid");
-  grid.innerHTML = "";
+// В loadDay добавь fetch для календаря:
+async function loadDay(date) {
+  state.date = date;
+  const [grid, preds, score, charts, calendar] = await Promise.all([
+    fetchJSON(`/days/${date}`),
+    fetchJSON(`/predict/${date}`),
+    fetchJSON(`/score/${date}`),
+    fetchJSON(`/charts/${date}`),
+    fetchJSON(`/calendar/${date}`) // <-- Добавили
+  ]);
+  state.grid = grid;
+  state.predictions = preds;
+  state.scoreData = score;
+  state.chartData = charts;
+  state.calendarData = calendar; // <-- Сохраняем
   
-  // Простой календарь на текущий месяц (только числа)
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  
-  // Пустые ячейки для смещения первого дня
-  const firstDay = new Date(year, month, 1).getDay();
-  const offset = firstDay === 0 ? 6 : firstDay - 1; // Пн-Вс
-  
-  for (let i = 0; i < offset; i++) {
-    grid.appendChild(document.createElement("div"));
-  }
+  renderHome();
+}
 
-  for (let d = 1; d <= daysInMonth; d++) {
-    const div = document.createElement("div");
-    div.className = "calendar-day";
-    div.textContent = d;
-    // Клик по календарю переключает на логгер и ставит дату
-    div.addEventListener("click", () => {
-      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      document.getElementById("date-picker").value = dateStr;
+// Новая функция рендера календаря
+function renderCalendar() {
+  if (!state.calendarData) return;
+
+  const activityEl = document.getElementById("heatmap-activity");
+  const scoreEl = document.getElementById("heatmap-score");
+  activityEl.innerHTML = "";
+  scoreEl.innerHTML = "";
+
+  for (const day of state.calendarData) {
+    // --- 1. Виджет Activity Density ---
+    const cellAct = document.createElement("div");
+    cellAct.className = "heatmap-cell";
+    
+    if (day.filled > 0 && day.dominant) {
+      // Вычисляем прозрачность от 0.3 до 1.0 в зависимости от заполненности (макс 48 блоков)
+      const opacity = 0.3 + (Math.min(day.filled, 48) / 48) * 0.7;
+      cellAct.style.background = `rgba(var(--${day.dominant}-rgb), ${opacity})`;
+      cellAct.title = `${day.date}: ${day.dominant} (${day.filled} blocks)`;
+    } else {
+      cellAct.classList.add("empty");
+      cellAct.title = `${day.date}: No data`;
+    }
+    
+    // Клик по ячейке перекидывает на этот день
+    cellAct.addEventListener("click", () => {
+      document.getElementById("date-picker").value = day.date;
       window.hasAutoScrolled = false;
-      loadDay(dateStr);
+      loadDay(day.date);
       document.querySelector('[data-view="home"]').click();
     });
-    grid.appendChild(div);
+    activityEl.appendChild(cellAct);
+
+    // --- 2. Виджет Day Balance ---
+    const cellScore = document.createElement("div");
+    cellScore.className = "heatmap-cell";
+    
+    if (day.filled > 0) {
+      // Цвет от красного (0) к зеленому (100). 
+      // Используем RGB интерполяцию: (239, 68, 68) -> (16, 185, 129)
+      const t = day.score / 100;
+      const r = Math.round(239 + (16 - 239) * t);
+      const g = Math.round(68 + (185 - 68) * t);
+      const b = Math.round(68 + (129 - 68) * t);
+      
+      // Прозрачность тоже чуть зависит от скора, чтобы пустые дни не выделялись
+      const opacity = 0.4 + t * 0.6;
+      cellScore.style.background = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+      cellScore.title = `${day.date}: Score ${day.score}`;
+    } else {
+      cellScore.classList.add("empty");
+      cellScore.title = `${day.date}: No data`;
+    }
+
+    cellScore.addEventListener("click", () => {
+      document.getElementById("date-picker").value = day.date;
+      window.hasAutoScrolled = false;
+      loadDay(day.date);
+      document.querySelector('[data-view="home"]').click();
+    });
+    scoreEl.appendChild(cellScore);
   }
 }
+
+
 
 function renderTimeline() {
   const timelineEl = document.getElementById("timeline");
