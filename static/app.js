@@ -7,6 +7,8 @@ const state = {
   chartData: null,
   editing: null,
   activeSlotIndex: 0,
+  currentView: "home",
+  theme: "dark",
 };
 
 let distChartInstance = null;
@@ -21,34 +23,15 @@ const catColors = {
   chores: 'rgba(180, 83, 9, 0.8)'
 };
 
-function todayISO() {
-  const d = new Date();
-  const tz = d.getTimezoneOffset() * 60000;
-  return new Date(d - tz).toISOString().slice(0, 10);
-}
-
-function getCurrentSlot() {
-  const now = new Date();
-  return Math.floor((now.getHours() * 60 + now.getMinutes()) / 30);
-}
-
-function slotToTime(i) {
-  const h = String(Math.floor(i / 2)).padStart(2, "0");
-  const m = i % 2 === 0 ? "00" : "30";
-  return `${h}:${m}`;
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => (
-    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
-  ));
-}
+// ... (функции todayISO, getCurrentSlot, slotToTime, escapeHtml, fetchJSON остаются без изменений)
+function todayISO() { const d = new Date(); const tz = d.getTimezoneOffset() * 60000; return new Date(d - tz).toISOString().slice(0, 10); }
+function getCurrentSlot() { const now = new Date(); return Math.floor((now.getHours() * 60 + now.getMinutes()) / 30); }
+function slotToTime(i) { const h = String(Math.floor(i / 2)).padStart(2, "0"); const m = i % 2 === 0 ? "00" : "30"; return `${h}:${m}`; }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
 async function fetchJSON(url, options) {
-  // Добавляем случайный параметр, чтобы браузер 100% не кэшировал
   const separator = url.includes('?') ? '&' : '?';
   const noCacheUrl = `${url}${separator}_t=${Date.now()}`;
-  
   const r = await fetch(noCacheUrl, { cache: 'no-store', ...options });
   if (!r.ok) {
     let detail = `HTTP ${r.status}`;
@@ -58,6 +41,59 @@ async function fetchJSON(url, options) {
   return r.status === 204 ? null : r.json();
 }
 
+// ====== НАВИГАЦИЯ И ТЕМА ======
+function setupNavigation() {
+  const navItems = document.querySelectorAll(".nav-item");
+  const views = document.querySelectorAll(".view");
+
+  navItems.forEach(item => {
+    item.addEventListener("click", () => {
+      const viewName = item.dataset.view;
+      state.currentView = viewName;
+
+      navItems.forEach(n => n.classList.remove("active"));
+      item.classList.add("active");
+
+      views.forEach(v => v.classList.remove("active"));
+      document.getElementById(`view-${viewName}`).classList.add("active");
+
+      // Если открыли графики, нужно перерисовать их (Chart.js глючит в скрытых элементах)
+      if (viewName === "charts") {
+        setTimeout(renderCharts, 50);
+      } else if (viewName === "calendar") {
+        renderCalendar();
+      }
+    });
+  });
+}
+
+function setupTheme() {
+  const savedTheme = localStorage.getItem("theme") || "dark";
+  setTheme(savedTheme);
+
+  document.querySelectorAll(".theme-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      setTheme(btn.dataset.theme);
+    });
+  });
+}
+
+function setTheme(theme) {
+  state.theme = theme;
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("theme", theme);
+
+  document.querySelectorAll(".theme-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.theme === theme);
+  });
+
+  // Перерисовываем графики в новых цветах (опционально, Chart.js сам подхватит переменные CSS, если мы настроим)
+  if (state.currentView === "charts") {
+    setTimeout(renderCharts, 50);
+  }
+}
+
+// ====== ЗАГРУЗКА ДАННЫХ ======
 async function loadMeta() {
   const data = await fetchJSON("/meta");
   state.categories = data.categories;
@@ -76,41 +112,31 @@ async function loadDay(date) {
   state.scoreData = score;
   state.chartData = charts;
   
-  render();
+  renderHome();
 }
 
-function render() {
+function renderHome() {
   renderStats();
   renderTimeline();
   renderScore();
-  renderCharts();
+  if (state.currentView === "charts") renderCharts();
+  if (state.currentView === "calendar") renderCalendar();
 }
 
+// ... (renderStats, renderScore, renderCharts, renderTimeline, initScrollLogic, updateActiveTime, openModal, renderCategorySelect, saveBlock, deleteBlock, closeModal остаются без изменений)
 function renderStats() {
   const filled = state.grid.slots.filter(s => s.block);
   const counts = {};
-  for (const s of filled) {
-    counts[s.block.category] = (counts[s.block.category] || 0) + 1;
-  }
+  for (const s of filled) counts[s.block.category] = (counts[s.block.category] || 0) + 1;
   const parts = Object.entries(counts).map(([c, n]) => `${c}: ${n}`).join(" · ");
-  document.getElementById("stats").innerHTML = `
-    <span>logged: <b>${filled.length}</b>/48</span>
-    ${parts ? `<span>${escapeHtml(parts)}</span>` : ""}
-  `;
+  // Убрали шапку, stats можно вывести в консоль или добавить в какой-то элемент (пока пропустим визуализацию)
 }
 
 function renderScore() {
   const scoreEl = document.getElementById("score-value");
   const data = state.scoreData;
-
-  if (!data || data.total_blocks === 0) {
-    scoreEl.textContent = "—";
-    scoreEl.className = "score-circle";
-    return;
-  }
-
+  if (!data || data.total_blocks === 0) { scoreEl.textContent = "—"; scoreEl.className = "score-circle"; return; }
   scoreEl.textContent = data.score;
-  
   scoreEl.className = "score-circle";
   if (data.score >= 80) scoreEl.classList.add("good");
   else if (data.score >= 50) scoreEl.classList.add("mid");
@@ -121,52 +147,66 @@ function renderCharts() {
   const data = state.chartData;
   if (!data) return;
 
+  const isDark = state.theme === "dark";
+  const textColor = isDark ? '#888' : '#6e6e73';
+  const gridColor = isDark ? '#333' : '#d2d2d7';
+
   const distLabels = Object.keys(data.distribution);
   const distValues = Object.values(data.distribution);
   const distBgColors = distLabels.map(c => catColors[c] || '#fff');
 
   if (distChartInstance) distChartInstance.destroy();
-  
   const ctxDist = document.getElementById('distChart').getContext('2d');
   distChartInstance = new Chart(ctxDist, {
     type: 'doughnut',
-    data: {
-      labels: distLabels,
-      datasets: [{ data: distValues, backgroundColor: distBgColors, borderWidth: 0 }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false, cutout: '70%',
-      plugins: { legend: { position: 'right', labels: { color: '#888', font: {size: 11} } } }
-    }
+    data: { labels: distLabels, datasets: [{ data: distValues, backgroundColor: distBgColors, borderWidth: 0 }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'right', labels: { color: textColor, font: {size: 11} } } } }
   });
 
   const histLabels = data.history.map(h => h.date);
   const histScores = data.history.map(h => h.score);
 
   if (historyChartInstance) historyChartInstance.destroy();
-
   const ctxHist = document.getElementById('historyChart').getContext('2d');
   historyChartInstance = new Chart(ctxHist, {
     type: 'line',
-    data: {
-      labels: histLabels,
-      datasets: [{
-        label: 'Day Balance', data: histScores,
-        borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.2)',
-        fill: true, tension: 0.4,
-        pointBackgroundColor: '#121212', pointBorderColor: '#10b981',
-        pointBorderWidth: 2, pointRadius: 4
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      scales: {
-        y: { min: 0, max: 100, grid: { color: '#333' }, ticks: { color: '#888' } },
-        x: { grid: { display: false }, ticks: { color: '#888' } }
-      },
-      plugins: { legend: { display: false } }
-    }
+    data: { labels: histLabels, datasets: [{ label: 'Day Balance', data: histScores, borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.2)', fill: true, tension: 0.4, pointBackgroundColor: isDark ? '#121212' : '#f5f5f7', pointBorderColor: '#10b981', pointBorderWidth: 2, pointRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 100, grid: { color: gridColor }, ticks: { color: textColor } }, x: { grid: { display: false }, ticks: { color: textColor } } }, plugins: { legend: { display: false } } }
   });
+}
+
+function renderCalendar() {
+  const grid = document.getElementById("calendar-grid");
+  grid.innerHTML = "";
+  
+  // Простой календарь на текущий месяц (только числа)
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  
+  // Пустые ячейки для смещения первого дня
+  const firstDay = new Date(year, month, 1).getDay();
+  const offset = firstDay === 0 ? 6 : firstDay - 1; // Пн-Вс
+  
+  for (let i = 0; i < offset; i++) {
+    grid.appendChild(document.createElement("div"));
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const div = document.createElement("div");
+    div.className = "calendar-day";
+    div.textContent = d;
+    // Клик по календарю переключает на логгер и ставит дату
+    div.addEventListener("click", () => {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      document.getElementById("date-picker").value = dateStr;
+      window.hasAutoScrolled = false;
+      loadDay(dateStr);
+      document.querySelector('[data-view="home"]').click();
+    });
+    grid.appendChild(div);
+  }
 }
 
 function renderTimeline() {
@@ -224,8 +264,7 @@ function initScrollLogic() {
     clearTimeout(scrollTimeout);
     scrollTimeout = setTimeout(() => {
       const centerIdx = Math.round(scrollEl.scrollLeft / step);
-      const safeIdx = Math.max(0, Math.min(47, centerIdx));
-      updateActiveTime(safeIdx);
+      updateActiveTime(Math.max(0, Math.min(47, centerIdx)));
     }, 50);
   };
 
@@ -243,12 +282,8 @@ function updateActiveTime(index) {
   state.activeSlotIndex = index;
   const timeDisplay = document.getElementById("active-time");
   timeDisplay.textContent = slotToTime(index);
-
-  if (state.date === todayISO() && index === getCurrentSlot()) {
-    timeDisplay.classList.add("is-now");
-  } else {
-    timeDisplay.classList.remove("is-now");
-  }
+  if (state.date === todayISO() && index === getCurrentSlot()) timeDisplay.classList.add("is-now");
+  else timeDisplay.classList.remove("is-now");
 }
 
 function openModal(slot, index) {
@@ -256,13 +291,8 @@ function openModal(slot, index) {
   const title = document.getElementById("modal-title");
   const deleteBtn = document.getElementById("delete-btn");
   
-  if (slot.block) {
-    title.textContent = `Edit ${slotToTime(index)}`;
-    deleteBtn.hidden = false;
-  } else {
-    title.textContent = `Log ${slotToTime(index)}`;
-    deleteBtn.hidden = true;
-  }
+  if (slot.block) { title.textContent = `Edit ${slotToTime(index)}`; deleteBtn.hidden = false; }
+  else { title.textContent = `Log ${slotToTime(index)}`; deleteBtn.hidden = true; }
 
   renderCategorySelect();
   document.getElementById("modal").hidden = false;
@@ -285,24 +315,14 @@ async function saveBlock(category) {
   const { block, index } = state.editing;
   try {
     if (block) {
-      await fetchJSON(`/blocks/${block.id}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category }),
-      });
+      await fetchJSON(`/blocks/${block.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category }) });
     } else {
-      await fetchJSON("/blocks", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ block_date: state.date, slot_index: index, category }),
-      });
+      await fetchJSON("/blocks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ block_date: state.date, slot_index: index, category }) });
     }
     closeModal();
     window.hasAutoScrolled = true; 
-    
-    // Перезагружаем день, чтобы обновить ВСЕ данные, включая Score и графики
     await loadDay(state.date);
-    
-    const scrollEl = document.getElementById("timeline-scroll");
-    scrollEl.scrollTo({ left: index * (64 + 8), behavior: 'auto' });
+    document.getElementById("timeline-scroll").scrollTo({ left: index * (64 + 8), behavior: 'auto' });
     updateActiveTime(index);
   } catch (e) { alert(`Error: ${e.message}`); }
 }
@@ -310,16 +330,13 @@ async function saveBlock(category) {
 async function deleteBlock() {
   if (!state.editing.block) return;
   if (!confirm("Delete this block?")) return;
-
   try {
     await fetchJSON(`/blocks/${state.editing.block.id}`, { method: "DELETE" });
     const index = state.editing.index;
     closeModal();
     window.hasAutoScrolled = true;
     await loadDay(state.date);
-    
-    const scrollEl = document.getElementById("timeline-scroll");
-    scrollEl.scrollTo({ left: index * (64 + 8), behavior: 'auto' });
+    document.getElementById("timeline-scroll").scrollTo({ left: index * (64 + 8), behavior: 'auto' });
     updateActiveTime(index);
   } catch (e) { alert(`Error: ${e.message}`); }
 }
@@ -330,6 +347,9 @@ function closeModal() {
 }
 
 function init() {
+  setupNavigation();
+  setupTheme();
+
   document.getElementById("date-picker").value = state.date;
   window.hasAutoScrolled = false; 
 
@@ -346,18 +366,14 @@ function init() {
   });
 
   document.getElementById("delete-btn").addEventListener("click", deleteBlock);
-  
-  document.getElementById("modal").addEventListener("click", e => {
-    if (e.target.id === "modal") closeModal();
-  });
+  document.getElementById("modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });
 
   setInterval(() => {
-      if(state.date === todayISO()) updateActiveTime(state.activeSlotIndex);
+      if(state.date === todayISO() && state.currentView === "home") updateActiveTime(state.activeSlotIndex);
   }, 60000);
 
   loadMeta().then(() => loadDay(state.date)).catch(err => {
-      document.getElementById("timeline").innerHTML =
-        `<p style="color:#ef4444;padding:16px">Failed to load: ${escapeHtml(err.message)}</p>`;
+      document.getElementById("timeline").innerHTML = `<p style="color:#ef4444;padding:16px">Failed to load: ${escapeHtml(err.message)}</p>`;
   });
 }
 
