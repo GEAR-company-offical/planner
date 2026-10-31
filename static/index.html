@@ -77,16 +77,14 @@
         </div>
       </div>
 
-      <!-- ВКЛАДКА 3: ГРАФИКИ -->
+            <!-- ВКЛАДКА 3: ГРАФИКИ -->
       <div id="view-charts" class="view">
         <h2>Analytics</h2>
         <div class="charts-container">
-          <div class="chart-box">
-            <canvas id="distChart"></canvas>
-          </div>
-          <div class="chart-box">
-            <canvas id="historyChart"></canvas>
-          </div>
+          <div class="chart-box"><canvas id="distChart"></canvas></div>
+          <div class="chart-box"><canvas id="historyChart"></canvas></div>
+          <div class="chart-box"><canvas id="hourlyChart"></canvas></div>
+          <div class="chart-box"><canvas id="dowChart"></canvas></div>
         </div>
       </div>
 
@@ -95,11 +93,11 @@
         <h2>Settings</h2>
         <div class="settings-box">
           <label>Color Theme</label>
-          <div class="theme-options">
-            <button class="theme-btn active" data-theme="dark">Dark</button>
+            <div class="theme-options">
+            <button class="theme-btn active" data-theme="midnight">Midnight</button>
+            <button class="theme-btn" data-theme="nord">Nord</button>
             <button class="theme-btn" data-theme="light">Light</button>
-            <button class="theme-btn" data-theme="cyberpunk">Cyberpunk</button>
-            <button class="theme-btn" data-theme="forest">Forest</button>
+            <button class="theme-btn" data-theme="matrix">Matrix</button>
           </div>
         </div>
       </div>

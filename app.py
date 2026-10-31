@@ -11,7 +11,10 @@ import crud
 from config import CATEGORIES, SLOTS_PER_DAY, STATIC_DIR, DAY_START_SLOT
 from database import get_db, init_db
 from schemas import BlockCreate, BlockRead, BlockUpdate, DayGrid
-from predictor import generate_smart_grid, calculate_day_score, get_chart_data, get_calendar_heatmap
+from predictor import generate_smart_grid, calculate_day_score, get_chart_data, get_calendar_heatmap, get_advanced_analytics
+
+
+
 
 
 @asynccontextmanager
@@ -99,3 +102,9 @@ def _check_is_past(target_date: date, slot_index: int):
     if slot_index < DAY_START_SLOT:
         raise HTTPException(status_code=400, detail="Cannot log night time (00:00-08:00)")
     # ... остальная логика
+
+
+
+@app.get("/analytics/{target_date}")
+def get_analytics(target_date: date, db: Session = Depends(get_db)):
+    return get_advanced_analytics(db, target_date)

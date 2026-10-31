@@ -1,115 +1,107 @@
+import random
+import joblib
 from collections import Counter, defaultdict
 from datetime import date, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from models import Block
-from config import DAY_START_SLOT, DAY_END_SLOT
+from config import DAY_START_SLOT, DAY_END_SLOT, BASE_DIR
+
+MODEL_PATH = BASE_DIR / "model.pkl"
+_ml_cache = None
+
+def load_ml_model():
+    global _ml_cache
+    if _ml_cache is None:
+        try:
+            _ml_cache = joblib.load(MODEL_PATH)
+        except FileNotFoundError:
+            _ml_cache = False
+    return _ml_cache
 
 def get_target_distribution(db: Session, target_date: date) -> dict[str, float]:
     lookback_date = target_date - timedelta(days=14)
     stmt = select(Block.category).where(
         Block.block_date >= lookback_date,
         Block.block_date <= target_date,
-        Block.slot_index >= DAY_START_SLOT # Игнорируем ночь
+        Block.slot_index >= DAY_START_SLOT
     )
     categories = list(db.scalars(stmt))
-    
     if not categories:
         return {"work": 0.35, "learning": 0.10, "exercise": 0.15, "social": 0.10, "rest": 0.25, "chores": 0.05}
-    
     counts = Counter(categories)
     total = sum(counts.values())
     return {cat: count / total for cat, count in counts.items()}
 
-def get_context_features(db: Session, target_date: date) -> dict:
-    """Собирает исторические данные для контекста."""
-    lookback_date = target_date - timedelta(days=14)
-    stmt = select(Block).where(
-        Block.block_date >= lookback_date,
-        Block.block_date < target_date,
-        Block.slot_index >= DAY_START_SLOT
-    )
-    blocks = list(db.scalars(stmt))
-    
-    # 1. Что обычно делаем в этот слот времени
-    slot_history = defaultdict(list)
-    # 2. Что обычно делаем в этот день недели
-    dow_history = defaultdict(list)
-    # 3. Матрица переходов (что идет после чего)
-    transitions = defaultdict(Counter)
-    
-    prev_cat = None
-    for b in sorted(blocks, key=lambda x: (x.block_date, x.slot_index)):
-        slot_history[b.slot_index].append(b.category)
-        dow_history[b.block_date.weekday()].append(b.category)
-        if prev_cat:
-            transitions[prev_cat][b.category] += 1
-        prev_cat = b.category
-        
-    return {
-        "slot_modes": {s: Counter(cats).most_common(1)[0][0] for s, cats in slot_history.items()},
-        "dow_modes": {d: Counter(cats).most_common(1)[0][0] for d, cats in dow_history.items()},
-        "transitions": transitions
-    }
-
 def generate_smart_grid(db: Session, target_date: date) -> list[dict]:
     db.expire_all()
     target_dist = get_target_distribution(db, target_date)
-    features = get_context_features(db, target_date)
     all_categories = list(target_dist.keys())
+    ml_data = load_ml_model()
     
     generated_slots = []
     current_counts = defaultdict(int)
     
-    # Добавляем пустые слоты для ночи (чтобы индексы совпадали с БД)
     for i in range(DAY_START_SLOT):
         generated_slots.append({"slot_index": i, "category": "rest"})
 
-    prev_cat = None
-    prev_prev_cat = None
+    prev_cat_encoded = -1
     target_dow = target_date.weekday()
 
     for slot in range(DAY_START_SLOT, DAY_END_SLOT):
-        scores = {}
-        for cat in all_categories:
-            score = 0.0
+        hour = slot // 2
+        
+        probs = {}
+        
+        # 1. Предсказание от ML-модели (если она загружена)
+        if ml_data:
+            model = ml_data["model"]
+            le = ml_data["encoder"]
             
-            # 1. Дефицит (Balancing) - самый важный фактор
+            # Модель предсказывает вероятности для всех классов
+            X_pred = [[target_dow, hour, prev_cat_encoded]]
+            ml_probs = model.predict_proba(X_pred)[0]
+            
+            # Переводим индексы классов обратно в названия категорий
+            for class_idx, prob in enumerate(ml_probs):
+                cat_name = le.inverse_transform([class_idx])[0]
+                if prob > 0.05: # Берем только значимые вероятности
+                    probs[cat_name] = prob
+        else:
+            # Fallback: равномерное распределение, если модели нет
+            probs = {cat: 1.0 for cat in all_categories}
+
+        # 2. Балансировка (Deficit): штрафуем переборы
+        for cat in list(probs.keys()):
             current_ratio = current_counts[cat] / ((slot - DAY_START_SLOT) + 1)
-            deficit = target_dist.get(cat, 0) - current_ratio
-            score += deficit * 10.0  # Сильный вес для баланса
+            target = target_dist.get(cat, 0.1)
+            if current_ratio > target:
+                penalty = (current_ratio - target) * 3.0
+                probs[cat] = max(0.01, probs[cat] - penalty)
 
-            # 2. Исторический режим для этого времени (например, 09:00 = work)
-            if features["slot_modes"].get(slot) == cat:
-                score += 3.0
+        # 3. Запрет на 3 одинаковых блока подряд
+        if len(generated_slots) >= 2 and generated_slots[-1]["category"] == generated_slots[-2]["category"]:
+            last_cat = generated_slots[-1]["category"]
+            if last_cat in probs:
+                probs[last_cat] *= 0.1
 
-            # 3. Контекст дня недели (суббота утром != вторник утром)
-            if features["dow_modes"].get(target_dow) == cat:
-                score += 1.5
-            
-            # 4. Матрица переходов (если до этого был work, то дальше?)
-            if prev_cat and features["transitions"][prev_cat].get(cat):
-                transition_prob = features["transitions"][prev_cat][cat] / sum(features["transitions"][prev_cat].values())
-                score += transition_prob * 2.0
+        # Нормализация
+        total_p = sum(probs.values())
+        if total_p == 0:
+            probs = {cat: 1.0 / len(all_categories) for cat in all_categories}
+        else:
+            probs = {cat: p / total_p for cat, p in probs.items()}
 
-            # 5. Анти-повторение (нельзя ставить 3 одинаковых блока подряд)
-            if prev_cat == cat and prev_prev_cat == cat:
-                score -= 5.0
-            
-            # Небольшой шум, чтобы дни не были абсолютно идентичными
-            score += (hash((slot, cat, str(target_date))) % 100) / 1000.0
-            
-            scores[cat] = score
-
-        # Выбираем категорию с максимальным счетом
-        chosen_cat = max(scores, key=scores.get)
+        # Выбор
+        chosen_cat = random.choices(list(probs.keys()), weights=list(probs.values()), k=1)[0]
         
         current_counts[chosen_cat] += 1
         generated_slots.append({"slot_index": slot, "category": chosen_cat})
         
-        prev_prev_cat = prev_cat
-        prev_cat = chosen_cat
-        
+        # Обновляем prev_cat для следующего шага
+        if ml_data:
+            prev_cat_encoded = ml_data["encoder"].transform([chosen_cat])[0]
+
     return generated_slots
 
 def calculate_day_score(db: Session, target_date: date) -> dict:
@@ -205,3 +197,44 @@ def get_calendar_heatmap(db: Session, end_date: date, days: int = 120) -> list[d
         })
         current_date += timedelta(days=1)
     return result
+
+def get_advanced_analytics(db: Session, target_date: date) -> dict:
+    db.expire_all()
+    start_date = target_date - timedelta(days=30) # Смотрим на месяц назад
+    
+    stmt = select(Block).where(
+        Block.block_date >= start_date,
+        Block.block_date <= target_date,
+        Block.slot_index >= DAY_START_SLOT
+    )
+    blocks = list(db.scalars(stmt))
+    
+    hourly = defaultdict(lambda: defaultdict(int))
+    dow_dist = defaultdict(lambda: defaultdict(int))
+    
+    for b in blocks:
+        hour = b.slot_index // 2
+        dow = b.block_date.weekday()
+        hourly[hour][b.category] += 1
+        dow_dist[dow][b.category] += 1
+        
+    return {
+        "hourly": hourly,
+        "dow": dow_dist
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

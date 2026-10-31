@@ -1,11 +1,11 @@
 const state = {
-  calendarData: null,
   date: todayISO(),
   categories: [],
   grid: null,
   predictions: null,
   scoreData: null,
   chartData: null,
+  calendarData: null,
   editing: null,
   activeSlotIndex: 0,
   currentView: "home",
@@ -24,11 +24,28 @@ const catColors = {
   chores: 'rgba(180, 83, 9, 0.8)'
 };
 
-// ... (функции todayISO, getCurrentSlot, slotToTime, escapeHtml, fetchJSON остаются без изменений)
-function todayISO() { const d = new Date(); const tz = d.getTimezoneOffset() * 60000; return new Date(d - tz).toISOString().slice(0, 10); }
-function getCurrentSlot() { const now = new Date(); return Math.floor((now.getHours() * 60 + now.getMinutes()) / 30); }
-function slotToTime(i) { const h = String(Math.floor(i / 2)).padStart(2, "0"); const m = i % 2 === 0 ? "00" : "30"; return `${h}:${m}`; }
-function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function todayISO() {
+  const d = new Date();
+  const tz = d.getTimezoneOffset() * 60000;
+  return new Date(d - tz).toISOString().slice(0, 10);
+}
+
+function getCurrentSlot() {
+  const now = new Date();
+  return Math.floor((now.getHours() * 60 + now.getMinutes()) / 30);
+}
+
+function slotToTime(i) {
+  const h = String(Math.floor(i / 2)).padStart(2, "0");
+  const m = i % 2 === 0 ? "00" : "30";
+  return `${h}:${m}`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
 
 async function fetchJSON(url, options) {
   const separator = url.includes('?') ? '&' : '?';
@@ -42,7 +59,6 @@ async function fetchJSON(url, options) {
   return r.status === 204 ? null : r.json();
 }
 
-// ====== НАВИГАЦИЯ И ТЕМА ======
 function setupNavigation() {
   const navItems = document.querySelectorAll(".nav-item");
   const views = document.querySelectorAll(".view");
@@ -58,7 +74,6 @@ function setupNavigation() {
       views.forEach(v => v.classList.remove("active"));
       document.getElementById(`view-${viewName}`).classList.add("active");
 
-      // Если открыли графики, нужно перерисовать их (Chart.js глючит в скрытых элементах)
       if (viewName === "charts") {
         setTimeout(renderCharts, 50);
       } else if (viewName === "calendar") {
@@ -88,13 +103,11 @@ function setTheme(theme) {
     btn.classList.toggle("active", btn.dataset.theme === theme);
   });
 
-  // Перерисовываем графики в новых цветах (опционально, Chart.js сам подхватит переменные CSS, если мы настроим)
   if (state.currentView === "charts") {
     setTimeout(renderCharts, 50);
   }
 }
 
-// ====== ЗАГРУЗКА ДАННЫХ ======
 async function loadMeta() {
   const data = await fetchJSON("/meta");
   state.categories = data.categories;
@@ -102,19 +115,24 @@ async function loadMeta() {
 
 async function loadDay(date) {
   state.date = date;
-  const [grid, preds, score, charts] = await Promise.all([
+  const [grid, preds, score, charts, calendar, analytics] = await Promise.all([
     fetchJSON(`/days/${date}`),
     fetchJSON(`/predict/${date}`),
     fetchJSON(`/score/${date}`),
-    fetchJSON(`/charts/${date}`)
+    fetchJSON(`/charts/${date}`),
+    fetchJSON(`/calendar/${date}`),
+    fetchJSON(`/analytics/${date}`) // <-- НОВЫЙ ЗАПРОС
   ]);
   state.grid = grid;
   state.predictions = preds;
   state.scoreData = score;
   state.chartData = charts;
+  state.calendarData = calendar;
+  state.analyticsData = analytics; // <-- СОХРАНЯЕМ
   
   renderHome();
 }
+
 
 function renderHome() {
   renderStats();
@@ -124,13 +142,8 @@ function renderHome() {
   if (state.currentView === "calendar") renderCalendar();
 }
 
-// ... (renderStats, renderScore, renderCharts, renderTimeline, initScrollLogic, updateActiveTime, openModal, renderCategorySelect, saveBlock, deleteBlock, closeModal остаются без изменений)
 function renderStats() {
-  const filled = state.grid.slots.filter(s => s.block);
-  const counts = {};
-  for (const s of filled) counts[s.block.category] = (counts[s.block.category] || 0) + 1;
-  const parts = Object.entries(counts).map(([c, n]) => `${c}: ${n}`).join(" · ");
-  // Убрали шапку, stats можно вывести в консоль или добавить в какой-то элемент (пока пропустим визуализацию)
+  // Функция оставлена для совместимости, визуально статистика убрана из UI
 }
 
 function renderScore() {
@@ -146,62 +159,140 @@ function renderScore() {
 
 function renderCharts() {
   const data = state.chartData;
-  if (!data) return;
+  const analytics = state.analyticsData;
+  if (!data || !analytics) return;
 
-  // Читаем цвета прямо из CSS, чтобы графики работали с любой темой
   const style = getComputedStyle(document.documentElement);
   const textColor = style.getPropertyValue('--muted').trim();
   const gridColor = style.getPropertyValue('--border').trim();
   const pointColor = style.getPropertyValue('--bg').trim();
-  const accentColor = style.getPropertyValue('--exercise-rgb').trim(); // Зеленый из текущей темы
 
+  // Хелпер для получения цвета из CSS-переменной
+  const getCatColor = (cat, alpha = 1) => {
+    const val = style.getPropertyValue(`--${cat}-rgb`).trim();
+    return val ? `rgba(${val}, ${alpha})` : `rgba(0,0,0,${alpha})`;
+  };
+
+  // ==========================================
+  // 1. Doughnut (Распределение категорий)
+  // ==========================================
   const distLabels = Object.keys(data.distribution);
   const distValues = Object.values(data.distribution);
-  
-  // Для пончика используем цвета из категорий
-  const distBgColors = distLabels.map(c => `rgba(var(--${c}-rgb), 0.8)`);
+  const distBgColors = distLabels.map(c => getCatColor(c, 0.8));
 
-  if (distChartInstance) distChartInstance.destroy();
+  if (window.distChartInstance) window.distChartInstance.destroy();
   const ctxDist = document.getElementById('distChart').getContext('2d');
-  distChartInstance = new Chart(ctxDist, {
+  window.distChartInstance = new Chart(ctxDist, {
     type: 'doughnut',
-    data: { labels: distLabels, datasets: [{ data: distValues, backgroundColor: distBgColors, borderWidth: 0 }] },
-    options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'right', labels: { color: textColor, font: {size: 11} } } } }
+    data: { 
+      labels: distLabels, 
+      datasets: [{ data: distValues, backgroundColor: distBgColors, borderWidth: 0 }] 
+    },
+    options: { 
+      responsive: true, 
+      maintainAspectRatio: false, 
+      cutout: '70%', 
+      plugins: { legend: { position: 'right', labels: { color: textColor, font: {size: 11} } } } 
+    }
   });
 
+  // ==========================================
+  // 2. Line (История баланса)
+  // ==========================================
   const histLabels = data.history.map(h => h.date);
   const histScores = data.history.map(h => h.score);
 
-  if (historyChartInstance) historyChartInstance.destroy();
+  if (window.historyChartInstance) window.historyChartInstance.destroy();
   const ctxHist = document.getElementById('historyChart').getContext('2d');
-  historyChartInstance = new Chart(ctxHist, {
+  window.historyChartInstance = new Chart(ctxHist, {
     type: 'line',
-    data: { labels: histLabels, datasets: [{ label: 'Day Balance', data: histScores, borderColor: `rgb(${accentColor})`, backgroundColor: `rgba(${accentColor}, 0.2)`, fill: true, tension: 0.4, pointBackgroundColor: pointColor, pointBorderColor: `rgb(${accentColor})`, pointBorderWidth: 2, pointRadius: 4 }] },
-    options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 100, grid: { color: gridColor }, ticks: { color: textColor } }, x: { grid: { display: false }, ticks: { color: textColor } } }, plugins: { legend: { display: false } } }
+    data: { 
+      labels: histLabels, 
+      datasets: [{ 
+        label: 'Day Balance', 
+        data: histScores, 
+        borderColor: getCatColor('exercise', 1), 
+        backgroundColor: getCatColor('exercise', 0.2), 
+        fill: true, 
+        tension: 0.4, 
+        pointBackgroundColor: pointColor, 
+        pointBorderColor: getCatColor('exercise', 1), 
+        pointBorderWidth: 2, 
+        pointRadius: 4 
+      }] 
+    },
+    options: { 
+      responsive: true, 
+      maintainAspectRatio: false, 
+      scales: { 
+        y: { min: 0, max: 100, grid: { color: gridColor }, ticks: { color: textColor } }, 
+        x: { grid: { display: false }, ticks: { color: textColor } } 
+      }, 
+      plugins: { legend: { display: false } } 
+    }
+  });
+
+  // ==========================================
+  // 3. Bar (Активность по часам)
+  // ==========================================
+  if (window.hourlyChartInstance) window.hourlyChartInstance.destroy();
+  
+  const hourKeys = Object.keys(analytics.hourly).sort((a, b) => parseInt(a) - parseInt(b));
+  const hourLabels = hourKeys.map(h => `${h}:00`);
+  
+  const workByHour = hourKeys.map(h => (analytics.hourly[h] && analytics.hourly[h]["work"]) ? analytics.hourly[h]["work"] : 0);
+  const restByHour = hourKeys.map(h => (analytics.hourly[h] && analytics.hourly[h]["rest"]) ? analytics.hourly[h]["rest"] : 0);
+
+  const ctxHourly = document.getElementById('hourlyChart').getContext('2d');
+  window.hourlyChartInstance = new Chart(ctxHourly, {
+    type: 'bar',
+    data: {
+      labels: hourLabels,
+      datasets: [
+        { label: 'Work', data: workByHour, backgroundColor: getCatColor('work', 0.8) },
+        { label: 'Rest', data: restByHour, backgroundColor: getCatColor('rest', 0.8) }
+      ]
+    },
+    options: { 
+      responsive: true, 
+      maintainAspectRatio: false, 
+      scales: { 
+        x: { stacked: true, ticks: { color: textColor } }, 
+        y: { stacked: true, grid: { color: gridColor }, ticks: { color: textColor } } 
+      } 
+    }
+  });
+
+  // ==========================================
+  // 4. Bar (Активность по дням недели)
+  // ==========================================
+  if (window.dowChartInstance) window.dowChartInstance.destroy();
+  
+  const dowLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const workByDow = dowLabels.map((_, i) => (analytics.dow[i] && analytics.dow[i]["work"]) ? analytics.dow[i]["work"] : 0);
+  const restByDow = dowLabels.map((_, i) => (analytics.dow[i] && analytics.dow[i]["rest"]) ? analytics.dow[i]["rest"] : 0);
+
+  const ctxDow = document.getElementById('dowChart').getContext('2d');
+  window.dowChartInstance = new Chart(ctxDow, {
+    type: 'bar',
+    data: {
+      labels: dowLabels,
+      datasets: [
+        { label: 'Work', data: workByDow, backgroundColor: getCatColor('work', 0.8) },
+        { label: 'Rest', data: restByDow, backgroundColor: getCatColor('rest', 0.8) }
+      ]
+    },
+    options: { 
+      responsive: true, 
+      maintainAspectRatio: false, 
+      scales: { 
+        x: { stacked: true, ticks: { color: textColor } }, 
+        y: { stacked: true, grid: { color: gridColor }, ticks: { color: textColor } } 
+      } 
+    }
   });
 }
 
-
-// В loadDay добавь fetch для календаря:
-async function loadDay(date) {
-  state.date = date;
-  const [grid, preds, score, charts, calendar] = await Promise.all([
-    fetchJSON(`/days/${date}`),
-    fetchJSON(`/predict/${date}`),
-    fetchJSON(`/score/${date}`),
-    fetchJSON(`/charts/${date}`),
-    fetchJSON(`/calendar/${date}`) // <-- Добавили
-  ]);
-  state.grid = grid;
-  state.predictions = preds;
-  state.scoreData = score;
-  state.chartData = charts;
-  state.calendarData = calendar; // <-- Сохраняем
-  
-  renderHome();
-}
-
-// Новая функция рендера календаря
 function renderCalendar() {
   if (!state.calendarData) return;
 
@@ -211,13 +302,10 @@ function renderCalendar() {
   scoreEl.innerHTML = "";
 
   for (const day of state.calendarData) {
-    // --- 1. Виджет Activity Density ---
     const cellAct = document.createElement("div");
     cellAct.className = "heatmap-cell";
-    
     if (day.filled > 0 && day.dominant) {
-      // Вычисляем прозрачность от 0.3 до 1.0 в зависимости от заполненности (макс 48 блоков)
-      const opacity = 0.3 + (Math.min(day.filled, 48) / 48) * 0.7;
+      const opacity = 0.3 + (Math.min(day.filled, 32) / 32) * 0.7;
       cellAct.style.background = `rgba(var(--${day.dominant}-rgb), ${opacity})`;
       cellAct.title = `${day.date}: ${day.dominant} (${day.filled} blocks)`;
     } else {
@@ -225,7 +313,6 @@ function renderCalendar() {
       cellAct.title = `${day.date}: No data`;
     }
     
-    // Клик по ячейке перекидывает на этот день
     cellAct.addEventListener("click", () => {
       document.getElementById("date-picker").value = day.date;
       window.hasAutoScrolled = false;
@@ -234,19 +321,13 @@ function renderCalendar() {
     });
     activityEl.appendChild(cellAct);
 
-    // --- 2. Виджет Day Balance ---
     const cellScore = document.createElement("div");
     cellScore.className = "heatmap-cell";
-    
     if (day.filled > 0) {
-      // Цвет от красного (0) к зеленому (100). 
-      // Используем RGB интерполяцию: (239, 68, 68) -> (16, 185, 129)
       const t = day.score / 100;
       const r = Math.round(239 + (16 - 239) * t);
       const g = Math.round(68 + (185 - 68) * t);
       const b = Math.round(68 + (129 - 68) * t);
-      
-      // Прозрачность тоже чуть зависит от скора, чтобы пустые дни не выделялись
       const opacity = 0.4 + t * 0.6;
       cellScore.style.background = `rgba(${r}, ${g}, ${b}, ${opacity})`;
       cellScore.title = `${day.date}: Score ${day.score}`;
@@ -265,8 +346,6 @@ function renderCalendar() {
   }
 }
 
-
-
 function renderTimeline() {
   const timelineEl = document.getElementById("timeline");
   timelineEl.innerHTML = "";
@@ -274,7 +353,6 @@ function renderTimeline() {
   const todayStr = todayISO();
   const currentSlot = getCurrentSlot();
 
-  // Отрисовываем только с 16 по 47 слот (с 08:00 до 23:30)
   for (let i = 16; i < 48; i++) {
     const slot = state.grid.slots[i];
     const block = slot.block;
@@ -288,7 +366,6 @@ function renderTimeline() {
     let isFuture = state.date > todayStr || (state.date === todayStr && i > currentSlot);
     let isNow = state.date === todayStr && i === currentSlot;
 
-    // Если сейчас ночь, линия NOW будет за пределами сетки, это нормально
     if (block) {
       div.classList.add("filled", `cat-${block.category}`);
       div.innerHTML = `<span class="cat-letter">${block.category.charAt(0).toUpperCase()}</span>`;
@@ -310,20 +387,21 @@ function renderTimeline() {
   setTimeout(initScrollLogic, 50);
 }
 
-
 function initScrollLogic() {
   const scrollEl = document.getElementById("timeline-scroll");
   const step = 64 + 8; 
+  const MAX_DOM_INDEX = 31;
 
-    if (!window.hasAutoScrolled) {
-    // Если сейчас день, и время > 08:00, скроллим к текущему
-    let targetIdx = 0;
-    if (state.date === todayISO() && getCurrentSlot() >= 16) {
-       targetIdx = getCurrentSlot() - 16;
+  if (!window.hasAutoScrolled) {
+    let targetDomIdx = 0;
+    const current = getCurrentSlot();
+    if (state.date === todayISO() && current >= 16) {
+      targetDomIdx = Math.min(current - 16, MAX_DOM_INDEX);
     }
-    scrollEl.scrollTo({ left: targetIdx * step, behavior: 'auto' });
+    
+    scrollEl.scrollTo({ left: targetDomIdx * step, behavior: 'auto' });
     window.hasAutoScrolled = true;
-    updateActiveTime(targetIdx + 16);
+    updateActiveTime(targetDomIdx);
   }
 
   let scrollTimeout;
@@ -331,7 +409,8 @@ function initScrollLogic() {
     clearTimeout(scrollTimeout);
     scrollTimeout = setTimeout(() => {
       const centerIdx = Math.round(scrollEl.scrollLeft / step);
-      updateActiveTime(Math.max(0, Math.min(47, centerIdx)));
+      const safeIdx = Math.max(0, Math.min(MAX_DOM_INDEX, centerIdx));
+      updateActiveTime(safeIdx);
     }, 50);
   };
 
@@ -340,17 +419,24 @@ function initScrollLogic() {
     const direction = e.deltaY > 0 ? 1 : -1; 
     const currentIdx = Math.round(scrollEl.scrollLeft / step);
     let nextIdx = currentIdx + direction;
-    nextIdx = Math.max(0, Math.min(47, nextIdx));
+    nextIdx = Math.max(0, Math.min(MAX_DOM_INDEX, nextIdx));
+    
     scrollEl.scrollTo({ left: nextIdx * step, behavior: 'smooth' });
   };
 }
 
-function updateActiveTime(index) {
-  state.activeSlotIndex = index;
+function updateActiveTime(domIndex) {
+  state.activeSlotIndex = domIndex;
   const timeDisplay = document.getElementById("active-time");
-  timeDisplay.textContent = slotToTime(index);
-  if (state.date === todayISO() && index === getCurrentSlot()) timeDisplay.classList.add("is-now");
-  else timeDisplay.classList.remove("is-now");
+  const realSlotIndex = domIndex + 16;
+  
+  timeDisplay.textContent = slotToTime(realSlotIndex);
+
+  if (state.date === todayISO() && realSlotIndex === getCurrentSlot()) {
+    timeDisplay.classList.add("is-now");
+  } else {
+    timeDisplay.classList.remove("is-now");
+  }
 }
 
 function openModal(slot, index) {
@@ -389,22 +475,29 @@ async function saveBlock(category) {
     closeModal();
     window.hasAutoScrolled = true; 
     await loadDay(state.date);
-    document.getElementById("timeline-scroll").scrollTo({ left: index * (64 + 8), behavior: 'auto' });
-    updateActiveTime(index);
+    
+    const domIdx = index - 16;
+    const scrollEl = document.getElementById("timeline-scroll");
+    scrollEl.scrollTo({ left: domIdx * (64 + 8), behavior: 'auto' });
+    updateActiveTime(domIdx);
   } catch (e) { alert(`Error: ${e.message}`); }
 }
 
 async function deleteBlock() {
   if (!state.editing.block) return;
   if (!confirm("Delete this block?")) return;
+
   try {
     await fetchJSON(`/blocks/${state.editing.block.id}`, { method: "DELETE" });
     const index = state.editing.index;
     closeModal();
     window.hasAutoScrolled = true;
     await loadDay(state.date);
-    document.getElementById("timeline-scroll").scrollTo({ left: index * (64 + 8), behavior: 'auto' });
-    updateActiveTime(index);
+    
+    const domIdx = index - 16;
+    const scrollEl = document.getElementById("timeline-scroll");
+    scrollEl.scrollTo({ left: domIdx * (64 + 8), behavior: 'auto' });
+    updateActiveTime(domIdx);
   } catch (e) { alert(`Error: ${e.message}`); }
 }
 
