@@ -53,7 +53,7 @@ async function loadDay(date) {
   ]);
   state.grid = grid;
   state.predictions = preds;
-  window.hasAutoScrolled = false;
+  // Убрали сброс window.hasAutoScrolled отсюда
   render();
 }
 
@@ -116,11 +116,12 @@ function renderTimeline() {
 
 function initScrollLogic() {
   const scrollEl = document.getElementById("timeline-scroll");
-  const step = 64 + 8;
+  const step = 64 + 8; // 72px
 
+  // Автоскролл только при ПЕРВОЙ загрузке или смене даты
   if (!window.hasAutoScrolled) {
     const targetIdx = state.date === todayISO() ? getCurrentSlot() : 0;
-    scrollEl.scrollLeft = targetIdx * step;
+    scrollEl.scrollTo({ left: targetIdx * step, behavior: 'auto' });
     window.hasAutoScrolled = true;
     updateActiveTime(targetIdx);
   }
@@ -135,9 +136,10 @@ function initScrollLogic() {
     }, 50);
   };
 
+  // УСКОРЯЕМ ПРОКРУТКУ (по 2 блока за тик)
   document.querySelector(".timeline-wrapper").onwheel = (e) => {
     e.preventDefault();
-    const direction = e.deltaY > 0 ? 1 : -1;
+    const direction = e.deltaY > 0 ? 2 : -2; // Было 1 и -1
     const currentIdx = Math.round(scrollEl.scrollLeft / step);
     let nextIdx = currentIdx + direction;
     nextIdx = Math.max(0, Math.min(47, nextIdx));
@@ -205,8 +207,16 @@ async function saveBlock(category) {
       });
     }
     closeModal();
+    
+    // БЛОКИРУЕМ АВТОСКРОЛЛ ПРИ ОБНОВЛЕНИИ
+    window.hasAutoScrolled = true; 
     await loadDay(state.date);
-    document.getElementById("timeline-scroll").scrollLeft = index * 72;
+    
+    // Возвращаем скролл на место
+    const scrollEl = document.getElementById("timeline-scroll");
+    scrollEl.scrollTo({ left: index * (64 + 8), behavior: 'auto' });
+    updateActiveTime(index);
+
   } catch (e) { alert(`Error: ${e.message}`); }
 }
 
@@ -218,8 +228,16 @@ async function deleteBlock() {
     await fetchJSON(`/blocks/${state.editing.block.id}`, { method: "DELETE" });
     const index = state.editing.index;
     closeModal();
+    
+    // БЛОКИРУЕМ АВТОСКРОЛЛ ПРИ ОБНОВЛЕНИИ
+    window.hasAutoScrolled = true;
     await loadDay(state.date);
-    document.getElementById("timeline-scroll").scrollLeft = index * 72;
+    
+    // Возвращаем скролл на место
+    const scrollEl = document.getElementById("timeline-scroll");
+    scrollEl.scrollTo({ left: index * (64 + 8), behavior: 'auto' });
+    updateActiveTime(index);
+
   } catch (e) { alert(`Error: ${e.message}`); }
 }
 
@@ -230,19 +248,23 @@ function closeModal() {
 
 function init() {
   document.getElementById("date-picker").value = state.date;
+  window.hasAutoScrolled = false; // При старте страницы скроллим к NOW
 
   document.getElementById("date-picker").addEventListener("change", e => {
+    window.hasAutoScrolled = false; // При смене даты скроллим к началу/NOW
     loadDay(e.target.value).catch(err => alert(err.message));
   });
 
   document.getElementById("today-btn").addEventListener("click", () => {
     const t = todayISO();
     document.getElementById("date-picker").value = t;
+    window.hasAutoScrolled = false; // При клике на Today скроллим к NOW
     loadDay(t).catch(err => alert(err.message));
   });
 
-  document.getElementById("cancel-btn").addEventListener("click", closeModal);
   document.getElementById("delete-btn").addEventListener("click", deleteBlock);
+  
+  // Выход по клику на пустое пространство (фон)
   document.getElementById("modal").addEventListener("click", e => {
     if (e.target.id === "modal") closeModal();
   });
@@ -257,4 +279,4 @@ function init() {
   });
 }
 
-document.addEventListener("DOMContentLoaded", init);    
+document.addEventListener("DOMContentLoaded", init);
