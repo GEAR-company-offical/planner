@@ -1,4 +1,4 @@
-Понял. Вот README без тройных обратных кавычек — можно копировать целиком сразу.
+**English** | [Русский](./README.ru.md)
 
 # Day Logger — Smart Time Block Planner
 
@@ -150,3 +150,4 @@ The application will be available at `http://127.0.0.1:8000`.
 ## License
 
 This project is intended for educational and personal use.
+
