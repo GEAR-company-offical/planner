@@ -1,7 +1,6 @@
 const state = {
   date: todayISO(),
   categories: [],
-  statuses: [],
   grid: null,
   editing: null,
 };
@@ -28,10 +27,7 @@ async function fetchJSON(url, options) {
   const r = await fetch(url, options);
   if (!r.ok) {
     let detail = `HTTP ${r.status}`;
-    try {
-      const body = await r.json();
-      if (body.detail) detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
-    } catch (_) {}
+    try { const body = await r.json(); if (body.detail) detail = body.detail; } catch (_) {}
     throw new Error(detail);
   }
   return r.status === 204 ? null : r.json();
@@ -40,7 +36,6 @@ async function fetchJSON(url, options) {
 async function loadMeta() {
   const data = await fetchJSON("/meta");
   state.categories = data.categories;
-  state.statuses = data.statuses;
 }
 
 async function loadDay(date) {
@@ -57,24 +52,12 @@ function render() {
 function renderStats() {
   const filled = state.grid.slots.filter(s => s.block);
   const counts = {};
-  let energySum = 0, energyCount = 0;
-
   for (const s of filled) {
     counts[s.block.category] = (counts[s.block.category] || 0) + 1;
-    if (s.block.energy != null) {
-      energySum += s.block.energy;
-      energyCount++;
-    }
   }
-
-  const avg = energyCount ? (energySum / energyCount).toFixed(1) : "—";
-  const parts = Object.entries(counts)
-    .map(([c, n]) => `${c}: ${n}`)
-    .join(" · ");
-
+  const parts = Object.entries(counts).map(([c, n]) => `${c}: ${n}`).join(" · ");
   document.getElementById("stats").innerHTML = `
-    <span>blocks: <b>${filled.length}</b>/48</span>
-    <span>avg energy: <b>${avg}</b></span>
+    <span>logged: <b>${filled.length}</b>/48</span>
     ${parts ? `<span>${escapeHtml(parts)}</span>` : ""}
   `;
 }
@@ -84,68 +67,74 @@ function renderTimeline() {
   el.innerHTML = "";
 
   for (const slot of state.grid.slots) {
-    const row = document.createElement("div");
-    row.className = "slot";
+    const div = document.createElement("div");
+    div.className = "slot";
     const block = slot.block;
     const time = slotToTime(slot.slot_index);
 
     if (block) {
-      row.classList.add("filled", `cat-${block.category}`);
-      const energy = block.energy != null ? ` · ⚡${block.energy}` : "";
-      const notes = block.notes ? ` · ${escapeHtml(block.notes)}` : "";
-      row.innerHTML = `
-        <span class="time">${time}</span>
-        <span class="content">
-          <span class="cat">${escapeHtml(block.category)}</span>
-          <span class="meta">${escapeHtml(block.status)}${energy}${notes}</span>
-        </span>`;
+      div.classList.add("filled", `cat-${block.category}`);
+      const letter = block.category.charAt(0).toUpperCase();
+      div.innerHTML = `<span class="cat-letter">${letter}</span>`;
+      div.title = `${time} - ${block.category}`;
     } else {
-      row.classList.add("empty");
-      row.innerHTML = `
-        <span class="time">${time}</span>
-        <span class="content"></span>`;
+      div.classList.add("empty");
     }
 
-    row.addEventListener("click", () => openModal(slot));
-    el.appendChild(row);
+    div.addEventListener("click", () => openModal(slot));
+    el.appendChild(div);
+  }
+  updateNowLine();
+}
+
+function updateNowLine() {
+  const timeline = document.getElementById("timeline");
+  const existing = document.getElementById("now-line");
+  if (existing) existing.remove();
+
+  if (state.date !== todayISO()) return;
+
+  const now = new Date();
+  const currentSlotFloat = (now.getHours() * 60 + now.getMinutes()) / 30;
+  const leftPos = currentSlotFloat * (64 + 8);
+
+  const line = document.createElement("div");
+  line.id = "now-line";
+  line.className = "now-line";
+  line.style.left = `${leftPos}px`;
+  line.innerHTML = `<span class="now-label">NOW</span>`;
+  timeline.appendChild(line);
+
+  if (!window.hasAutoScrolled) {
+    timeline.scrollLeft = Math.max(0, leftPos - (timeline.clientWidth / 2) + 32);
+    window.hasAutoScrolled = true;
   }
 }
 
-function openModal(slot) {
-  state.editing = {
-    slot,
-    block: slot.block,
-    selectedCategory: slot.block ? slot.block.category : null,
-  };
+function setupHorizontalScroll() {
+  const timeline = document.getElementById("timeline");
+  timeline.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    timeline.scrollLeft += e.deltaY * 2; 
+  }, { passive: false });
+}
 
+function openModal(slot) {
+  state.editing = { slot, block: slot.block };
+  
   const title = document.getElementById("modal-title");
   const deleteBtn = document.getElementById("delete-btn");
-
+  
   if (slot.block) {
     title.textContent = `Edit ${slotToTime(slot.slot_index)}`;
     deleteBtn.hidden = false;
-    document.getElementById("status-select").value = slot.block.status;
-    document.getElementById("energy-input").value = slot.block.energy ?? 3;
-    document.getElementById("energy-value").textContent = slot.block.energy ?? 3;
-    document.getElementById("notes-input").value = slot.block.notes ?? "";
   } else {
-    title.textContent = `Add block ${slotToTime(slot.slot_index)}`;
+    title.textContent = `Log ${slotToTime(slot.slot_index)}`;
     deleteBtn.hidden = true;
-    document.getElementById("status-select").value = "done";
-    document.getElementById("energy-input").value = 3;
-    document.getElementById("energy-value").textContent = 3;
-    document.getElementById("notes-input").value = "";
   }
 
   renderCategorySelect();
   document.getElementById("modal").hidden = false;
-}
-
-function setSelectedCategory(cat) {
-  state.editing.selectedCategory = cat;
-  document.querySelectorAll(".category-btn").forEach(b => {
-    b.classList.toggle("selected", b.dataset.cat === cat);
-  });
 }
 
 function renderCategorySelect() {
@@ -156,43 +145,33 @@ function renderCategorySelect() {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = `category-btn cat-${cat}`;
-    btn.dataset.cat = cat;
     btn.textContent = cat;
-    if (cat === state.editing.selectedCategory) btn.classList.add("selected");
-    btn.addEventListener("click", () => setSelectedCategory(cat));
+    // Клик по кнопке сразу сохраняет!
+    btn.addEventListener("click", () => saveBlock(cat));
     container.appendChild(btn);
   }
 }
 
-async function saveBlock() {
-  if (!state.editing.selectedCategory) {
-    alert("Choose a category");
-    return;
-  }
-
-  const { block, selectedCategory } = state.editing;
-  const payload = {
-    category: selectedCategory,
-    status: document.getElementById("status-select").value,
-    energy: Number(document.getElementById("energy-input").value),
-    notes: document.getElementById("notes-input").value.trim() || null,
-  };
-
+async function saveBlock(category) {
+  const { block } = state.editing;
+  
   try {
     if (block) {
+      // Обновляем существующий
       await fetchJSON(`/blocks/${block.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ category }),
       });
     } else {
+      // Создаем новый
       await fetchJSON("/blocks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           block_date: state.date,
           slot_index: state.editing.slot.slot_index,
-          ...payload,
+          category,
         }),
       });
     }
@@ -225,32 +204,31 @@ function init() {
   document.getElementById("date-picker").value = state.date;
 
   document.getElementById("date-picker").addEventListener("change", e => {
+    window.hasAutoScrolled = false;
     loadDay(e.target.value).catch(err => alert(err.message));
   });
 
   document.getElementById("today-btn").addEventListener("click", () => {
     const t = todayISO();
     document.getElementById("date-picker").value = t;
+    window.hasAutoScrolled = false;
     loadDay(t).catch(err => alert(err.message));
   });
 
-  document.getElementById("save-btn").addEventListener("click", saveBlock);
   document.getElementById("cancel-btn").addEventListener("click", closeModal);
   document.getElementById("delete-btn").addEventListener("click", deleteBlock);
-
-  document.getElementById("energy-input").addEventListener("input", e => {
-    document.getElementById("energy-value").textContent = e.target.value;
-  });
-
   document.getElementById("modal").addEventListener("click", e => {
     if (e.target.id === "modal") closeModal();
   });
+
+  setupHorizontalScroll();
+  setInterval(updateNowLine, 60000);
 
   loadMeta()
     .then(() => loadDay(state.date))
     .catch(err => {
       document.getElementById("timeline").innerHTML =
-        `<p style="color:#dc2626;padding:16px">Failed to load: ${escapeHtml(err.message)}</p>`;
+        `<p style="color:#ef4444;padding:16px">Failed to load: ${escapeHtml(err.message)}</p>`;
     });
 }
 

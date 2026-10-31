@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 import crud
-from config import CATEGORIES, STATUSES, SLOTS_PER_DAY, STATIC_DIR
+from config import CATEGORIES, SLOTS_PER_DAY, STATIC_DIR
 from database import get_db, init_db
 from schemas import BlockCreate, BlockRead, BlockUpdate, DayGrid
 
@@ -18,12 +18,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(
-    title="Time Block Planner",
-    version="0.2.0",
-    description="48-slot day grid with category tracking",
-    lifespan=lifespan,
-)
+app = FastAPI(title="Day Logger", version="0.3.0", lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -40,11 +35,7 @@ def health():
 
 @app.get("/meta")
 def meta():
-    return {
-        "categories": CATEGORIES,
-        "statuses": STATUSES,
-        "slots_per_day": SLOTS_PER_DAY,
-    }
+    return {"categories": CATEGORIES, "slots_per_day": SLOTS_PER_DAY}
 
 
 @app.post("/blocks", response_model=BlockRead, status_code=201)
@@ -68,16 +59,6 @@ def list_blocks(
 @app.get("/days/{target_date}", response_model=DayGrid)
 def get_day(target_date: date, db: Session = Depends(get_db)):
     return crud.get_day_grid(db, target_date)
-
-
-@app.get("/blocks/by-slot/{target_date}/{slot}", response_model=BlockRead)
-def get_block_by_slot(target_date: date, slot: int, db: Session = Depends(get_db)):
-    if not 0 <= slot < SLOTS_PER_DAY:
-        raise HTTPException(status_code=422, detail="slot must be 0..47")
-    block = crud.get_block_by_slot(db, target_date, slot)
-    if not block:
-        raise HTTPException(status_code=404, detail="Block not found")
-    return block
 
 
 @app.patch("/blocks/{block_id}", response_model=BlockRead)

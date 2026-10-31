@@ -13,9 +13,6 @@ class Block(Base):
     block_date: Mapped[date] = mapped_column(Date, index=True)
     slot_index: Mapped[int] = mapped_column(Integer)
     category: Mapped[str] = mapped_column(String(30), index=True)
-    status: Mapped[str] = mapped_column(String(20), default="done")
-    energy: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
