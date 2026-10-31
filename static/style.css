@@ -6,6 +6,7 @@
   --muted: #888;
   --border: #333;
   --card: #1e1e1e;
+  --red: #ef4444;
   
   --work: #3b82f6;
   --learning: #8b5cf6;
@@ -33,56 +34,101 @@ header h1 { font-size: 18px; margin-right: auto; }
 
 main { max-width: 800px; margin: 40px auto; padding: 0 24px; width: 100%; }
 
-.timeline-wrapper { border: 2px solid var(--fg); border-radius: 8px; padding: 16px; background: var(--card); position: relative; }
+/* ====== КОНТЕЙНЕР ТАЙМЛАЙНА ====== */
+.timeline-wrapper {
+  border: 2px solid var(--fg);
+  border-radius: 8px;
+  background: var(--card);
+  position: relative;
+  overflow: hidden; /* Обрезаем блоки, которые выходят за рамки */
+  height: 140px; /* Фиксированная высота, чтобы всё влезло */
+}
 
+/* Верхняя статичная панель */
+.timeline-header {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 48px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+}
+
+.time-display {
+  font-family: ui-monospace, monospace;
+  font-size: 20px;
+  font-weight: bold;
+  border: 2px solid var(--border);
+  padding: 2px 16px;
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  transition: color 0.2s, border-color 0.2s;
+}
+
+/* Если время совпадает с реальным "сейчас" */
+.time-display.is-now {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+/* Фиксированная красная линия (идет от панели вниз) */
+.playhead {
+  position: absolute;
+  top: 48px;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  background: var(--red);
+  transform: translateX(-50%);
+  z-index: 5;
+  pointer-events: none; /* Линия не мешает кликам */
+}
+
+/* Лента с блоками */
 .timeline {
-  display: flex; flex-direction: row; gap: 8px; overflow-x: auto;
-  padding-top: 24px; padding-bottom: 12px; position: relative;
-  scrollbar-width: none; -ms-overflow-style: none;
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 64px 0 16px 0; /* Отступ сверху под панель, снизу под края */
+  position: relative;
+  
+  /* Магия: привязываем блоки к центру */
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  
+  /* Выравниваем так, чтобы первый и последний блоки могли встать в центр */
+  padding-left: calc(50% - 32px);
+  padding-right: calc(50% - 32px);
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 .timeline::-webkit-scrollbar { display: none; }
 
 .slot {
-  flex: 0 0 64px; height: 64px; border-radius: 6px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 18px; user-select: none; transition: transform 0.1s;
+  flex: 0 0 64px;
+  height: 64px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  user-select: none;
+  transition: transform 0.1s, opacity 0.1s;
+  
+  /* Привязка к центру красной линии */
+  scroll-snap-align: center; 
 }
-.slot:hover { transform: translateY(-2px); }
 
 .slot.empty { border: 1px dashed var(--border); background: transparent; }
-.slot.empty:hover { border-color: var(--fg); }
-
 .slot.filled { background: var(--border); border: 2px solid; color: #fff; }
 .slot .cat-letter { font-weight: 800; text-transform: uppercase; }
-
-
-.slot.predicted {
-  background: transparent;
-  border: 2px dashed var(--border);
-  opacity: 0.4;
-  color: var(--muted);
-  cursor: not-allowed; /* Показываем, что кликать нельзя */
-}
-
-.slot.predicted .cat-letter {
-  font-weight: 600;
-}
-
-/* Окрашиваем пунктир в цвет категории, но блекло */
-.slot.predicted.cat-work { border-color: var(--work); }
-.slot.predicted.cat-learning { border-color: var(--learning); }
-.slot.predicted.cat-exercise { border-color: var(--exercise); }
-.slot.predicted.cat-social { border-color: var(--social); }
-.slot.predicted.cat-rest { border-color: var(--rest); }
-.slot.predicted.cat-chores { border-color: var(--chores); }
-
-/* Текущий слот (сейчас) */
-.slot.now-slot {
-  border: 2px solid var(--border);
-  background: rgba(255,255,255,0.05);
-}
-
-
 
 .slot.cat-work { border-color: var(--work); }
 .slot.cat-learning { border-color: var(--learning); }
@@ -91,8 +137,17 @@ main { max-width: 800px; margin: 40px auto; padding: 0 24px; width: 100%; }
 .slot.cat-rest { border-color: var(--rest); }
 .slot.cat-chores { border-color: var(--chores); }
 
-.now-line { position: absolute; top: 0; bottom: 0; width: 2px; background-color: #ef4444; z-index: 5; pointer-events: none; }
-.now-label { position: absolute; top: 0; left: 50%; transform: translateX(-50%); color: #ef4444; font-weight: bold; font-size: 12px; letter-spacing: 1px; }
+/* Стили будущего */
+.slot.predicted {
+  background: transparent; border: 2px dashed var(--border);
+  opacity: 0.3; color: var(--muted); cursor: not-allowed;
+}
+.slot.predicted.cat-work { border-color: var(--work); }
+.slot.predicted.cat-learning { border-color: var(--learning); }
+.slot.predicted.cat-exercise { border-color: var(--exercise); }
+.slot.predicted.cat-social { border-color: var(--social); }
+.slot.predicted.cat-rest { border-color: var(--rest); }
+.slot.predicted.cat-chores { border-color: var(--chores); }
 
 .hint { text-align: center; color: var(--muted); font-size: 12px; margin-top: 16px; }
 
@@ -101,26 +156,9 @@ main { max-width: 800px; margin: 40px auto; padding: 0 24px; width: 100%; }
 .modal[hidden] { display: none; }
 .modal-content { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; width: 100%; max-width: 400px; }
 .modal-content h2 { font-size: 16px; margin-bottom: 20px; text-align: center; }
-
 .category-select { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-.category-btn {
-  padding: 16px; border: 2px solid var(--border); border-radius: 8px;
-  background: var(--bg); color: var(--fg); cursor: pointer; font: inherit;
-  font-size: 14px; font-weight: 600; text-transform: uppercase;
-  transition: all 0.1s;
-}
+.category-btn { padding: 16px; border: 2px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--fg); cursor: pointer; font: inherit; font-size: 14px; font-weight: 600; text-transform: uppercase; }
 .category-btn:hover { border-color: var(--fg); background: #333; }
-.category-btn.cat-work:hover { border-color: var(--work); color: var(--work); }
-.category-btn.cat-learning:hover { border-color: var(--learning); color: var(--learning); }
-.category-btn.cat-exercise:hover { border-color: var(--exercise); color: var(--exercise); }
-.category-btn.cat-social:hover { border-color: var(--social); color: var(--social); }
-.category-btn.cat-rest:hover { border-color: var(--rest); color: var(--rest); }
-.category-btn.cat-chores:hover { border-color: var(--chores); color: var(--chores); }
-
 .modal-actions { display: flex; gap: 8px; justify-content: space-between; margin-top: 24px; }
-.modal-actions button {
-  padding: 10px 16px; border-radius: 6px; border: 1px solid var(--border);
-  background: var(--bg); color: var(--fg); font: inherit; cursor: pointer;
-}
-.modal-actions button:hover { background: #333; }
-.modal-actions button#delete-btn { color: #ef4444; border-color: #ef4444; margin-right: auto; }
+.modal-actions button { padding: 10px 16px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; cursor: pointer; }
+.modal-actions button#delete-btn { color: var(--red); border-color: var(--red); margin-right: auto; }

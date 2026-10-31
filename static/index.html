@@ -19,17 +19,24 @@
 
   <main>
     <div class="timeline-wrapper">
+      <!-- Статичная верхняя панель с временем -->
+      <div class="timeline-header">
+        <div class="time-display" id="active-time">00:00</div>
+      </div>
+      
+      <!-- Фиксированная красная линия -->
+      <div class="playhead"></div>
+      
+      <!-- Движущиеся блоки -->
       <div class="timeline" id="timeline"></div>
     </div>
-    <p class="hint">Крути колесико мыши, чтобы листать день →</p>
+    <p class="hint">Крути колесико мыши, чтобы листать по 30 минут →</p>
   </main>
 
   <div class="modal" id="modal" hidden>
     <div class="modal-content">
       <h2 id="modal-title">What happened?</h2>
-      <!-- Только кнопки категорий -->
       <div class="category-select" id="category-select"></div>
-      
       <div class="modal-actions">
         <button id="delete-btn" type="button" hidden>Delete</button>
         <button id="cancel-btn" type="button">Cancel</button>

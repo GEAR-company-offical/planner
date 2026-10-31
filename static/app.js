@@ -4,6 +4,7 @@ const state = {
   grid: null,
   predictions: null,
   editing: null,
+  activeSlotIndex: 0,
 };
 
 function todayISO() {
@@ -46,13 +47,15 @@ async function loadMeta() {
 
 async function loadDay(date) {
   state.date = date;
-  // Загружаем реальные данные и предсказания параллельно
   const [grid, preds] = await Promise.all([
     fetchJSON(`/days/${date}`),
     fetchJSON(`/predict/${date}`)
   ]);
   state.grid = grid;
   state.predictions = preds;
+  
+  // Сбрасываем автоскролл при смене даты
+  window.hasAutoScrolled = false;
   render();
 }
 
@@ -88,93 +91,97 @@ function renderTimeline() {
 
     const div = document.createElement("div");
     div.className = "slot";
-    const time = slotToTime(i);
+    div.dataset.index = i;
 
     // Определяем статус времени
-    let isPast = false;
-    let isFuture = false;
-    
-    if (state.date < todayStr) {
-      isPast = true;
-    } else if (state.date > todayStr) {
-      isFuture = true;
-    } else {
-      // Сегодня
-      if (i < currentSlot) isPast = true;
-      else if (i > currentSlot) isFuture = true;
-      // i === currentSlot — это "сейчас" (ни past, ни future)
-    }
+    let isPast = state.date < todayStr || (state.date === todayStr && i < currentSlot);
+    let isFuture = state.date > todayStr || (state.date === todayStr && i > currentSlot);
 
     if (block) {
-      // Если блок уже залогирован (только в прошлом)
       div.classList.add("filled", `cat-${block.category}`);
       div.innerHTML = `<span class="cat-letter">${block.category.charAt(0).toUpperCase()}</span>`;
-      div.title = `${time} - ${block.category}`;
-      div.addEventListener("click", () => openModal(slot)); // Можно редактировать
+      if (isPast) div.addEventListener("click", () => openModal(slot, i));
     } else if (isFuture && prediction) {
-      // Будущий предсказанный блок
       div.classList.add("predicted", `cat-${prediction.category}`);
       div.innerHTML = `<span class="cat-letter">${prediction.category.charAt(0).toUpperCase()}</span>`;
-      div.title = `Predicted: ${time} - ${prediction.category}`;
-      // Клик не добавляем, так как нельзя редактировать
     } else if (isPast) {
-      // Прошлый пустой слот (можно заполнить)
       div.classList.add("empty");
-      div.addEventListener("click", () => openModal(slot));
+      div.addEventListener("click", () => openModal(slot, i));
     } else {
-      // Текущий слот (сейчас) или пустой будущий (если предсказания нет)
       div.classList.add("empty", "now-slot");
-      // Не добавляем клик
     }
 
     el.appendChild(div);
   }
-  updateNowLine();
+
+  // Настраиваем начальный скролл и слушатели
+  setTimeout(initScrollLogic, 50);
 }
 
-function updateNowLine() {
+function initScrollLogic() {
   const timeline = document.getElementById("timeline");
-  const existing = document.getElementById("now-line");
-  if (existing) existing.remove();
+  const slotWidth = 64;
+  const gap = 8;
+  const step = slotWidth + gap;
 
-  if (state.date !== todayISO()) return;
-
-  const now = new Date();
-  const currentSlotFloat = (now.getHours() * 60 + now.getMinutes()) / 30;
-  const leftPos = currentSlotFloat * (64 + 8);
-
-  const line = document.createElement("div");
-  line.id = "now-line";
-  line.className = "now-line";
-  line.style.left = `${leftPos}px`;
-  line.innerHTML = `<span class="now-label">NOW</span>`;
-  timeline.appendChild(line);
-
+  // Автоскролл к текущему времени при загрузке
   if (!window.hasAutoScrolled) {
-    timeline.scrollLeft = Math.max(0, leftPos - (timeline.clientWidth / 2) + 32);
+    const targetIdx = state.date === todayISO() ? getCurrentSlot() : 0;
+    // Центрируем целевой блок
+    timeline.scrollLeft = targetIdx * step;
     window.hasAutoScrolled = true;
+    updateActiveTime(targetIdx);
+  }
+
+  // Слушаем скролл для обновления верхнего времени
+  let scrollTimeout;
+  timeline.onscroll = () => {
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+      // Вычисляем, какой блок сейчас ровно по центру
+      const centerIdx = Math.round(timeline.scrollLeft / step);
+      const safeIdx = Math.max(0, Math.min(47, centerIdx));
+      updateActiveTime(safeIdx);
+    }, 50);
+  };
+
+  // Перехват колесика (шаг ровно на 1 блок)
+  timeline.onwheel = (e) => {
+    e.preventDefault();
+    const direction = e.deltaY > 0 ? 1 : -1;
+    const currentIdx = Math.round(timeline.scrollLeft / step);
+    let nextIdx = currentIdx + direction;
+    nextIdx = Math.max(0, Math.min(47, nextIdx));
+    
+    // Прокручиваем ровно к следующему блоку
+    timeline.scrollTo({ left: nextIdx * step, behavior: 'smooth' });
+  };
+}
+
+function updateActiveTime(index) {
+  state.activeSlotIndex = index;
+  const timeDisplay = document.getElementById("active-time");
+  timeDisplay.textContent = slotToTime(index);
+
+  // Подсвечиваем красным, если это "сейчас"
+  if (state.date === todayISO() && index === getCurrentSlot()) {
+    timeDisplay.classList.add("is-now");
+  } else {
+    timeDisplay.classList.remove("is-now");
   }
 }
 
-function setupHorizontalScroll() {
-  const timeline = document.getElementById("timeline");
-  timeline.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    timeline.scrollLeft += e.deltaY * 2; 
-  }, { passive: false });
-}
-
-function openModal(slot) {
-  state.editing = { slot, block: slot.block };
+function openModal(slot, index) {
+  state.editing = { slot, block: slot.block, index };
   
   const title = document.getElementById("modal-title");
   const deleteBtn = document.getElementById("delete-btn");
   
   if (slot.block) {
-    title.textContent = `Edit ${slotToTime(slot.slot_index)}`;
+    title.textContent = `Edit ${slotToTime(index)}`;
     deleteBtn.hidden = false;
   } else {
-    title.textContent = `Log ${slotToTime(slot.slot_index)}`;
+    title.textContent = `Log ${slotToTime(index)}`;
     deleteBtn.hidden = true;
   }
 
@@ -197,7 +204,7 @@ function renderCategorySelect() {
 }
 
 async function saveBlock(category) {
-  const { block } = state.editing;
+  const { block, index } = state.editing;
   
   try {
     if (block) {
@@ -212,13 +219,15 @@ async function saveBlock(category) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           block_date: state.date,
-          slot_index: state.editing.slot.slot_index,
+          slot_index: index,
           category,
         }),
       });
     }
     closeModal();
     await loadDay(state.date);
+    // Возвращаем скролл на то же место после перерисовки
+    document.getElementById("timeline").scrollLeft = index * (64 + 8);
   } catch (e) {
     alert(`Error: ${e.message}`);
   }
@@ -230,8 +239,10 @@ async function deleteBlock() {
 
   try {
     await fetchJSON(`/blocks/${state.editing.block.id}`, { method: "DELETE" });
+    const index = state.editing.index;
     closeModal();
     await loadDay(state.date);
+    document.getElementById("timeline").scrollLeft = index * (64 + 8);
   } catch (e) {
     alert(`Error: ${e.message}`);
   }
@@ -246,14 +257,12 @@ function init() {
   document.getElementById("date-picker").value = state.date;
 
   document.getElementById("date-picker").addEventListener("change", e => {
-    window.hasAutoScrolled = false;
     loadDay(e.target.value).catch(err => alert(err.message));
   });
 
   document.getElementById("today-btn").addEventListener("click", () => {
     const t = todayISO();
     document.getElementById("date-picker").value = t;
-    window.hasAutoScrolled = false;
     loadDay(t).catch(err => alert(err.message));
   });
 
@@ -263,9 +272,8 @@ function init() {
     if (e.target.id === "modal") closeModal();
   });
 
-  setupHorizontalScroll();
   setInterval(() => {
-      if(state.date === todayISO()) renderTimeline();
+      if(state.date === todayISO()) updateActiveTime(state.activeSlotIndex);
   }, 60000);
 
   loadMeta()
@@ -276,4 +284,4 @@ function init() {
     });
 }
 
-document.addEventListener("DOMContentLoaded", init);    
+document.addEventListener("DOMContentLoaded", init);
